@@ -1,0 +1,27 @@
+# PlatformIO build artifacts
+.pio/
+.pioenvs/
+.piolibdeps/
+build/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.idea/
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Build outputs
+*.bin
+*.elf
+*.hex
+*.map
