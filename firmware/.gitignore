@@ -1,0 +1,26 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.vscode/
+*.pyc
+
+# Build
+build/
+*.bin
+*.elf
+*.hex
+*.map
+
+# IDE
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
