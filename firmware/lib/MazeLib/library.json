@@ -1,0 +1,25 @@
+{
+    "name": "MazeLib",
+    "description": "Maze Solver for MicroMouse",
+    "keywords": "micromouse,maze",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kerikun11/micromouse-maze-library.git"
+    },
+    "authors": {
+        "name": "Ryotaro Onuki",
+        "email": "kerikun11+github@gmail.com",
+        "url": "https://github.com/kerikun11/"
+    },
+    "license": "MIT",
+    "build": {
+        "flags": [
+            "-std=c++17",
+            "-O2"
+        ],
+        "srcFilter": [
+            "-<*>",
+            "+<include>"
+        ]
+    }
+}
