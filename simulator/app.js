@@ -169,6 +169,15 @@ function downloadText(name, text) {
   URL.revokeObjectURL(url);
 }
 
+window.__fatalErr = "";
+
+window.addEventListener("error", (ev) => {
+  const msg = ev.message || "Script error";
+  window.__fatalErr += (window.__fatalErr ? "\n" : "") + msg;
+  console.error("[global error]", msg);
+  if (ev.filename) console.error("  at", ev.filename, ev.lineno + ":" + ev.colno);
+});
+
 function showFatal(msg) {
   consoleErr(msg);
   alert(msg);
@@ -421,7 +430,23 @@ function uiLoop() {
     ctx.fillStyle = "#6fe3a1";
     ctx.font = "18px monospace";
     ctx.textAlign = "center";
-    ctx.fillText("Connecting to simulation worker...", mazeCanvas.width/2, mazeCanvas.height/2);
+    if (window.__fatalErr) {
+      ctx.fillStyle = "#ff6b6b";
+      ctx.font = "13px monospace";
+      const linesEr = window.__fatalErr.split("\n");
+      for (let i = 0; i < linesEr.length; i++) {
+        ctx.fillText(linesEr[i].slice(0, 60), mazeCanvas.width/2, 120 + i * 24);
+      }
+      ctx.fillStyle = "#ffb3b3";
+      ctx.font = "15px monospace";
+      ctx.fillText("Try: hard-refresh (Ctrl+Shift+R) or reopen Live Server", mazeCanvas.width/2, mazeCanvas.height/2);
+      if (!window.__fatalNotified) {
+        window.__fatalNotified = true;
+        showFatal("Fatal script error: " + window.__fatalErr.split("\n")[0]);
+      }
+    } else {
+      ctx.fillText("Connecting to simulation worker...", mazeCanvas.width/2, mazeCanvas.height/2);
+    }
   }
 
   updateTelemetry();
