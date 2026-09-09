@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    it
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MicroMouse Simulator — NRW 8.0 (full firmware model)</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="title">
+        <h1>MicroMouse Simulator</h1>
+        <span class="sub"
+          >NRW 8.0 &middot; firmware-faithful flood-fill + slalom model</span
+        >
+      </div>
+      <div id="stateBadge" class="badge idle">IDLE</div>
+    </header>
+
+    <main>
+      <!-- LEFT: maze view -->
+      <section class="panel maze-panel">
+        <div class="panel-head">
+          <span>Maze (top view)</span>
+          <div class="toggles">
+            <label
+              ><input type="checkbox" id="tglKnown" checked /> known
+              walls</label
+            >
+            <label><input type="checkbox" id="tglActual" /> actual walls</label>
+            <label
+              ><input type="checkbox" id="tglSteps" checked /> flood
+              steps</label
+            >
+            <label
+              ><input type="checkbox" id="tglPath" checked /> planned
+              path</label
+            >
+          </div>
+        </div>
+        <canvas id="mazeCanvas" width="640" height="640"></canvas>
+        <div class="hint" id="editHint" hidden>
+          WALL EDIT MODE &mdash; click an edge to toggle a wall in the real maze
+        </div>
+        <div class="legend">
+          <span><i class="sw w-known"></i>known wall</span>
+          <span><i class="sw w-unknown"></i>unknown edge</span>
+          <span><i class="sw w-actual"></i>actual wall</span>
+          <span><i class="sw w-path"></i>planned dirs</span>
+          <span><i class="sw w-robot"></i>robot + sensor beams</span>
+        </div>
+      </section>
+
+      <!-- RIGHT: dashboard -->
+      <section class="dash">
+        <div class="panel controls">
+          <div class="panel-head">Mission Control</div>
+          <div class="btn-row">
+            <button id="btnSearch" class="btn primary">Search Run</button>
+            <button id="btnFast" class="btn fast" disabled>Fast Run</button>
+            <button id="btnStop" class="btn danger">Emergency Stop</button>
+          </div>
+          <div class="btn-row">
+            <button id="btnResetPose" class="btn">Reset Pose</button>
+            <button id="btnResetMap" class="btn">Reset Map</button>
+            <button id="btnNewMaze" class="btn">New Maze</button>
+            <button id="btnEditWalls" class="btn">Edit Walls</button>
+          </div>
+          <div class="btn-row">
+            <button id="btnBackup" class="btn">Backup Map</button>
+            <button id="btnRestore" class="btn">Restore Map</button>
+            <input type="file" id="fileRestore" accept=".json" hidden />
+            <button id="btnCrash" class="btn warn">Simulate Crash</button>
+          </div>
+          <div class="btn-row speed-row">
+            <label>Speed <output id="speedOut">4&times;</output></label>
+            <input
+              type="range"
+              id="speedRange"
+              min="0"
+              max="1"
+              step="0.01"
+              value="0.55"
+            />
+            <label><input type="checkbox" id="chkPause" /> pause</label>
+          </div>
+          <div class="btn-row">
+            <label
+              >Maze preset
+              <select id="mazePreset"></select
+            ></label>
+            <button id="btnLoadPreset" class="btn">Load</button>
+          </div>
+        </div>
+
+        <div class="panel telemetry">
+          <div class="panel-head">Telemetry</div>
+          <div class="grid4">
+            <div class="stat">
+              <span class="k">x</span><span class="v" id="stX">0</span
+              ><span class="u">mm</span>
+            </div>
+            <div class="stat">
+              <span class="k">y</span><span class="v" id="stY">0</span
+              ><span class="u">mm</span>
+            </div>
+            <div class="stat">
+              <span class="k">&theta;</span><span class="v" id="stTh">0</span
+              ><span class="u">&deg;</span>
+            </div>
+            <div class="stat">
+              <span class="k">v</span><span class="v" id="stV">0</span
+              ><span class="u">mm/s</span>
+            </div>
+            <div class="stat">
+              <span class="k">&omega;</span><span class="v" id="stW">0</span
+              ><span class="u">rad/s</span>
+            </div>
+            <div class="stat">
+              <span class="k">time</span><span class="v" id="stT">0.0</span
+              ><span class="u">s</span>
+            </div>
+            <div class="stat">
+              <span class="k">distance</span><span class="v" id="stD">0</span
+              ><span class="u">m</span>
+            </div>
+            <div class="stat">
+              <span class="k">explored</span><span class="v" id="stE">0</span
+              ><span class="u">cells</span>
+            </div>
+          </div>
+          <div class="grid4">
+            <div class="stat">
+              <span class="k">L sonar</span><span class="v" id="sL">0</span
+              ><span class="u">mm</span>
+            </div>
+            <div class="stat">
+              <span class="k">F sonar</span><span class="v" id="sF">0</span
+              ><span class="u">mm</span>
+            </div>
+            <div class="stat">
+              <span class="k">R sonar</span><span class="v" id="sR">0</span
+              ><span class="u">mm</span>
+            </div>
+            <div class="stat">
+              <span class="k">battery</span><span class="v" id="stB">8.4</span
+              ><span class="u">V</span>
+            </div>
+          </div>
+          <div class="charts">
+            <canvas id="chartV" width="300" height="80"></canvas>
+            <canvas id="chartW" width="300" height="80"></canvas>
+          </div>
+        </div>
+
+        <div class="panel params">
+          <div class="panel-head">
+            Parameters (defaults = firmware config.h)
+          </div>
+
+          <details open>
+            <summary>Maze &amp; mechanics</summary>
+            <div class="pg">
+              <label
+                >Cell size (mm)<input
+                  id="p_cell"
+                  type="number"
+                  value="180"
+                  step="1"
+              /></label>
+              <label
+                >Wall thickness (mm)<input
+                  id="p_wallT"
+                  type="number"
+                  value="12"
+                  step="1"
+              /></label>
+              <label
+                >Robot length (mm)<input
+                  id="p_rlen"
+                  type="number"
+                  value="100"
+                  step="1"
+              /></label>
+              <label
+                >Robot width (mm)<input
+                  id="p_rwid"
+                  type="number"
+                  value="100"
+                  step="1"
+              /></label>
+              <label
+                >Track width (mm)<input
+                  id="p_track"
+                  type="number"
+                  value="60"
+                  step="1"
+              /></label>
+              <label
+                >Slalom turn radius (mm)<input
+                  id="p_turnR"
+                  type="number"
+                  value="60"
+                  step="1"
+                  min="20"
+                  max="120"
+              /></label>
+            </div>
+          </details>
+
+          <details open>
+            <summary>Search run</summary>
+            <div class="pg">
+              <label
+                >Velocity straight (mm/s)<input
+                  id="p_s_vstr"
+                  type="number"
+                  value="300"
+                  step="10"
+              /></label>
+              <label
+                >Velocity curve (mm/s)<input
+                  id="p_s_vcur"
+                  type="number"
+                  value="240"
+                  step="10"
+              /></label>
+              <label
+                >Max velocity (mm/s)<input
+                  id="p_s_vmax"
+                  type="number"
+                  value="600"
+                  step="10"
+              /></label>
+              <label
+                >Accel (mm/s&sup2;)<input
+                  id="p_s_acc"
+                  type="number"
+                  value="3000"
+                  step="100"
+              /></label>
+              <label
+                >Decel (mm/s&sup2;)<input
+                  id="p_s_dec"
+                  type="number"
+                  value="2000"
+                  step="100"
+              /></label>
+              <label
+                >Straight FB gain<input
+                  id="p_s_fbg"
+                  type="number"
+                  value="20"
+                  step="0.5"
+              /></label>
+              <label
+                >Explore: prefer unknown<input
+                  id="p_s_prefUnk"
+                  type="number"
+                  value="0.9"
+                  step="0.1"
+                  min="0"
+                  max="1"
+              /></label>
+              <label
+                >Explore: revisit penalty<input
+                  id="p_s_revisit"
+                  type="number"
+                  value="4"
+                  step="1"
+                  min="0"
+              /></label>
+            </div>
+          </details>
+
+          <details>
+            <summary>Fast run</summary>
+            <div class="pg">
+              <label
+                >Max speed (mm/s)<input
+                  id="p_f_vmax"
+                  type="number"
+                  value="800"
+                  step="50"
+              /></label>
+              <label
+                >Curve speed (mm/s)<input
+                  id="p_f_vcur"
+                  type="number"
+                  value="450"
+                  step="10"
+              /></label>
+              <label
+                >Accel (mm/s&sup2;)<input
+                  id="p_f_acc"
+                  type="number"
+                  value="4000"
+                  step="100"
+              /></label>
+              <label
+                >Decel (mm/s&sup2;)<input
+                  id="p_f_dec"
+                  type="number"
+                  value="4000"
+                  step="100"
+              /></label>
+              <label
+                >Turn radius fast (mm)<input
+                  id="p_f_turnR"
+                  type="number"
+                  value="50"
+                  step="1"
+                  min="20"
+                  max="120"
+              /></label>
+              <label>V90 style<input id="p_f_v90" type="checkbox" /></label>
+            </div>
+          </details>
+
+          <details>
+            <summary>Controller &amp; power</summary>
+            <div class="pg">
+              <label
+                >Speed loop Kp<input
+                  id="p_c_kp"
+                  type="number"
+                  value="1.0"
+                  step="0.1"
+              /></label>
+              <label
+                >Speed loop Ki<input
+                  id="p_c_ki"
+                  type="number"
+                  value="0.1"
+                  step="0.05"
+              /></label>
+              <label
+                >Speed loop Kd<input
+                  id="p_c_kd"
+                  type="number"
+                  value="0.01"
+                  step="0.01"
+              /></label>
+              <label
+                >Battery (V)<input
+                  id="p_c_bat"
+                  type="number"
+                  value="8.4"
+                  step="0.1"
+              /></label>
+              <label
+                >Battery sag / lap (V)<input
+                  id="p_c_batsag"
+                  type="number"
+                  value="0.15"
+                  step="0.05"
+              /></label>
+            </div>
+          </details>
+
+          <details>
+            <summary>Sensors (HC-SR04 model)</summary>
+            <div class="pg">
+              <label
+                >Side wall threshold (mm)<input
+                  id="p_u_sThr"
+                  type="number"
+                  value="70"
+                  step="1"
+              /></label>
+              <label
+                >Front wall threshold (mm)<input
+                  id="p_u_fThr"
+                  type="number"
+                  value="120"
+                  step="1"
+              /></label>
+              <label
+                >Hysteresis factor<input
+                  id="p_u_hyst"
+                  type="number"
+                  value="1.15"
+                  step="0.01"
+              /></label>
+              <label
+                >Max range (mm)<input
+                  id="p_u_max"
+                  type="number"
+                  value="4000"
+                  step="100"
+              /></label>
+              <label
+                >Beam half-angle (&deg;)<input
+                  id="p_u_beam"
+                  type="number"
+                  value="8"
+                  step="1"
+              /></label>
+              <label
+                >Noise sigma (mm)<input
+                  id="p_u_noise"
+                  type="number"
+                  value="3"
+                  step="0.5"
+              /></label>
+              <label
+                >Miss probability<input
+                  id="p_u_miss"
+                  type="number"
+                  value="0.005"
+                  step="0.001"
+                  min="0"
+                  max="0.2"
+              /></label>
+              <label
+                >Glitch probability<input
+                  id="p_u_glitch"
+                  type="number"
+                  value="0.0"
+                  step="0.001"
+                  min="0"
+                  max="0.2"
+              /></label>
+            </div>
+          </details>
+
+          <details>
+            <summary>Odometer / IMU realism</summary>
+            <div class="pg">
+              <label
+                >Heading drift (deg/s)<input
+                  id="p_o_drift"
+                  type="number"
+                  value="0.02"
+                  step="0.01"
+              /></label>
+              <label
+                >Wheel slip (0..1)<input
+                  id="p_o_slip"
+                  type="number"
+                  value="0.02"
+                  step="0.01"
+                  min="0"
+                  max="0.3"
+              /></label>
+              <label
+                >Dead-time (ms)<input
+                  id="p_o_dead"
+                  type="number"
+                  value="8"
+                  step="1"
+              /></label>
+            </div>
+          </details>
+
+          <div class="btn-row">
+            <button id="btnApplyParams" class="btn">Apply (live)</button>
+            <button id="btnDefaults" class="btn">Defaults</button>
+          </div>
+        </div>
+
+        <div class="panel log-panel">
+          <div class="panel-head">Console</div>
+          <pre id="consoleLog" class="console"></pre>
+          <div class="btn-row">
+            <button id="btnClearLog" class="btn">Clear</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Model: same flood-fill/StepMap algorithm, thresholds and run parameters as
+      the ESP32 firmware (SearchRun / FastRun / MazeSolver), with a 2-D
+      kinematic model + ray-cast ultrasonic sensing. Numbers are firmware
+      defaults (config.h); tune to match your built robot.
+    </footer>
+
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
