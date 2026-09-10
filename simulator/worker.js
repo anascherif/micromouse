@@ -143,7 +143,6 @@ postMessage({
   stepsArr: sim.known.steps.slice(),
   newTrail: [],
   newLogs: [],
-  fullReset: false,
 });
 
 setInterval(tick, 16); // ~60 Hz

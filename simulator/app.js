@@ -12,13 +12,16 @@ let lastSnapTime = 0;
 
 function startWorker() {
   try {
-    worker = new Worker("worker.js");
+    const workerUrl = new URL('./worker.js', document.baseURI).href;
+    console.log("[app] creating worker:", workerUrl);
+    worker = new Worker(workerUrl);
     worker.onmessage = onWorkerMessage;
     worker.onerror = (e) => {
       console.error("Worker error:", e.message, e.filename, e.lineno);
       showFatal("Simulation worker failed: " + e.message);
     };
   } catch (err) {
+    console.error("[app] Worker creation failed:", err);
     showFatal("Web Workers unavailable. Serve this folder via Live Server or any static server (double-click file:// may block workers).");
   }
 }
