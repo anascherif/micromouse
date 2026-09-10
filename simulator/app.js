@@ -12,7 +12,9 @@ let lastSnapTime = 0;
 
 function startWorker() {
   try {
-    const workerUrl = new URL('./worker.js', document.baseURI).href;
+    // document.baseURI includes ?vscode-livepreview=true → strip it for worker URL
+    const base = document.baseURI.split('?')[0];          // "…/index.html"
+    const workerUrl = new URL('./worker.js', base).href;  // "…/worker.js" (no query)
     console.log("[app] creating worker:", workerUrl);
     worker = new Worker(workerUrl);
     worker.onmessage = onWorkerMessage;
