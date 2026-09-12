@@ -1,9 +1,10 @@
 /**
  * @file accel_curve.h
- * @brief 躍度0次、加速度1次、速度2次、位置3次関数により、滑らかな加速を実現する
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Smooth acceleration using jerk-0, accel-1st, velocity-2nd, and
+ * position-3rd order functions.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  * @see https://www.kerislab.jp/posts/2018-04-29-accel-designer4/
  */
 #pragma once
@@ -49,85 +50,90 @@
 #endif
 
 /**
- * @brief 制御関係の名前空間
+ * @brief Control-related namespace.
  */
 namespace ctrl {
 
 /**
- * @brief 走行距離拘束のない曲線加速の軌道を生成するクラス
+ * @brief Generates a curved acceleration profile without a distance
+ * constraint.
  *
- * - 引数の拘束に従って加速曲線を生成する
- * - 始点速度と終点速度を滑らかにつなぐ
- * - 移動距離の拘束はない
- * - 始点速度および終点速度は、正でも負でも可
+ * - Builds an acceleration curve from the given constraints.
+ * - Smoothly joins start and end velocities.
+ * - No constraint on travel distance.
+ * - Start and end velocities may be positive or negative.
  */
 class AccelCurve {
  public:
   /**
-   * @brief 初期化付きのコンストラクタ
-   * @param[in] j_max   最大躍度の大きさ [m/s/s/s], 正であること
-   * @param[in] a_max   最大加速度の大きさ [m/s/s], 正であること
-   * @param[in] v_start 始点速度 [m/s]
-   * @param[in] v_end   終点速度 [m/s]
+   * @brief Constructor with initialization.
+   * @param[in] j_max   Magnitude of maximum jerk [m/s/s/s], must be
+   * positive.
+   * @param[in] a_max   Magnitude of maximum acceleration [m/s/s], must
+   * be positive.
+   * @param[in] v_start Start velocity [m/s].
+   * @param[in] v_end   End velocity [m/s].
    */
   AccelCurve(const float j_max, const float a_max, const float v_start,
              const float v_end) {
     reset(j_max, a_max, v_start, v_end);
   }
   /**
-   * @brief とりあえずインスタンス化を行う空のコンストラクタ
-   * @attention 別途 reset() により初期化すること。
+   * @brief Empty constructor for instantiation only.
+   * @attention Must be initialized with reset() afterwards.
    */
   AccelCurve() {
     jm = am = t0 = t1 = t2 = t3 = v0 = v1 = v2 = v3 = x0 = x1 = x2 = x3 = 0;
   }
   /**
-   * @brief 引数の拘束条件から曲線を生成する関数
-   * @details この関数によってもれなくすべての変数が初期化される。
-   * @param[in] j_max   最大躍度の大きさ [m/s/s/s], 正であること
-   * @param[in] a_max   最大加速度の大きさ [m/s/s], 正であること
-   * @param[in] v_start 始点速度 [m/s]
-   * @param[in] v_end   終点速度 [m/s]
+   * @brief Generate the curve from the given constraints.
+   * @details Initializes all internal variables.
+   * @param[in] j_max   Magnitude of maximum jerk [m/s/s/s], must be
+   * positive.
+   * @param[in] a_max   Magnitude of maximum acceleration [m/s/s], must
+   * be positive.
+   * @param[in] v_start Start velocity [m/s].
+   * @param[in] v_end   End velocity [m/s].
    */
   void reset(const float j_max, const float a_max, const float v_start,
              const float v_end) {
-    /* 符号付きで代入 */
-    am = (v_end > v_start) ? a_max : -a_max;  //< 最大加速度の符号を決定
-    jm = (v_end > v_start) ? j_max : -j_max;  //< 最大躍度の符号を決定
-    /* 初期値と最終値を代入 */
-    v0 = v_start;  //< 代入
-    v3 = v_end;    //< 代入
-    t0 = 0;        //< ここでは初期値をゼロとする
-    x0 = 0;        //< ここでは初期値はゼロとする
-    /* 速度が曲線となる部分の時間を決定 */
+    /* assign with sign */
+    am = (v_end > v_start) ? a_max : -a_max;  //< sign of max acceleration
+    jm = (v_end > v_start) ? j_max : -j_max;  //< sign of max jerk
+    /* assign initial and final values */
+    v0 = v_start;  //< assign
+    v3 = v_end;    //< assign
+    t0 = 0;        //< initial time is zero here
+    x0 = 0;        //< initial position is zero here
+    /* duration of the curved velocity section */
     const auto tc = a_max / j_max;
-    /* 等加速度直線運動の時間を決定 */
+    /* duration of the constant-acceleration section */
     const auto tm = (v3 - v0) / am - tc;
-    /* 等加速度直線運動の有無で分岐 */
+    /* branch on whether constant acceleration occurs */
     if (tm > 0) {
-      /* 速度: 曲線 -> 直線 -> 曲線 */
+      /* velocity: curve -> line -> curve */
       t1 = t0 + tc;
       t2 = t1 + tm;
       t3 = t2 + tc;
-      v1 = v0 + am * tc / 2;                 //< v(t) を積分
-      v2 = v1 + am * tm;                     //< v(t) を積分
-      x1 = x0 + v0 * tc + am * tc * tc / 6;  //< x(t) を積分
-      x2 = x1 + v1 * tm;                     //< x(t) を積分
-      x3 = x0 + (v0 + v3) / 2 * (t3 - t0);  //< v(t) グラフの台形の面積より
+      v1 = v0 + am * tc / 2;                 //< integrate v(t)
+      v2 = v1 + am * tm;                     //< integrate v(t)
+      x1 = x0 + v0 * tc + am * tc * tc / 6;  //< integrate x(t)
+      x2 = x1 + v1 * tm;                     //< integrate x(t)
+      x3 = x0 + (v0 + v3) / 2 * (t3 - t0);  //< trapezoid area of v(t)
     } else {
-      /* 速度: 曲線 -> 曲線 */
-      const auto tcp = std::sqrt((v3 - v0) / jm);  //< 変曲までの時間
+      /* velocity: curve -> curve */
+      const auto tcp = std::sqrt((v3 - v0) / jm);  //< time to inflection
       t1 = t2 = t0 + tcp;
       t3 = t2 + tcp;
-      v1 = v2 = (v0 + v3) / 2;  //< 対称性より中点となる
-      x1 = x2 = x0 + v1 * tcp + jm * tcp * tcp * tcp / 6;  //< x(t) を積分
-      x3 = x0 + 2 * v1 * tcp;  //< 速度 v(t) グラフの面積より
+      v1 = v2 = (v0 + v3) / 2;  //< midpoint by symmetry
+      x1 = x2 = x0 + v1 * tcp + jm * tcp * tcp * tcp / 6;  //< integrate x(t)
+      x3 = x0 + 2 * v1 * tcp;  //< area of the v(t) graph
     }
   }
   /**
-   * @brief 任意の時刻 t [s] における躍度 j [m/s/s/s] を返す関数
-   * @param[in] 時刻 t [s]
-   * @return 躍度 [m/s/s/s]
+   * @brief Jerk j [m/s/s/s] at time t [s].
+   * @param[in] Time t [s].
+   * @return Jerk [m/s/s/s].
    */
   float j(const float t) const {
     if (t <= t0)
@@ -142,9 +148,9 @@ class AccelCurve {
       return 0;
   }
   /**
-   * @brief 任意の時刻 t [s] における加速度 a [m/s/s] を返す関数
-   * @param[in] 時刻 t [s]
-   * @return 加速度 [m/s/s]
+   * @brief Acceleration a [m/s/s] at time t [s].
+   * @param[in] Time t [s].
+   * @return Acceleration [m/s/s].
    */
   float a(const float t) const {
     if (t <= t0)
@@ -159,9 +165,9 @@ class AccelCurve {
       return 0;
   }
   /**
-   * @brief 任意の時刻 t [s] における速度 v [m/s] を返す関数
-   * @param[in] 時刻 t [s]
-   * @return 速度 [m/s]
+   * @brief Velocity v [m/s] at time t [s].
+   * @param[in] Time t [s].
+   * @return Velocity [m/s].
    */
   float v(const float t) const {
     if (t <= t0)
@@ -176,9 +182,9 @@ class AccelCurve {
       return v3;
   }
   /**
-   * @brief 任意の時刻 t [s] における位置 x [m] を返す関数
-   * @param[in] 時刻 t [s]
-   * @return 位置 [m]
+   * @brief Position x [m] at time t [s].
+   * @param[in] Time t [s].
+   * @return Position [m].
    */
   float x(const float t) const {
     if (t <= t0)
@@ -193,41 +199,41 @@ class AccelCurve {
       return x3 + v3 * (t - t3);
   }
   /**
-   * @brief 終点時刻 [s]
+   * @brief End time [s].
    */
   float t_end() const { return t3; }
   /**
-   * @brief 終点速度 [m/s]
+   * @brief End velocity [m/s].
    */
   float v_end() const { return v3; }
   /**
-   * @brief 終点位置 [m]
+   * @brief End position [m].
    */
   float x_end() const { return x3; }
   /**
-   * @brief 曲線加速の開始時刻 [s]
+   * @brief Start time of the curved acceleration [s].
    */
   float t_0() const { return t0; }
   /**
-   * @brief 等加速度直線運動の開始時刻 [s]
+   * @brief Start time of the constant-acceleration section [s].
    */
   float t_1() const { return t1; }
   /**
-   * @brief 等加速度直線運動の終了時刻 [s]
+   * @brief End time of the constant-acceleration section [s].
    */
   float t_2() const { return t2; }
   /**
-   * @brief 曲線加速の終了時刻 [s]
+   * @brief End time of the curved acceleration [s].
    */
   float t_3() const { return t3; }
   /**
-   * @brief 境界のタイムスタンプをまとめて取得する関数
+   * @brief All boundary timestamps.
    */
   const std::array<float, 4> getTimeStamps() const {
     return {{t0, t1, t2, t3}};
   }
   /**
-   * @brief std::ostream に軌道のcsvを出力する関数
+   * @brief Print the trajectory as CSV to a std::ostream.
    */
   void printCsv(std::ostream& os, const float t_interval = 1e-3f) const {
     for (float t = t0; t < t_end(); t += t_interval) {
@@ -236,7 +242,7 @@ class AccelCurve {
     }
   }
   /**
-   * @brief 情報の表示
+   * @brief Print the object information.
    */
   friend std::ostream& operator<<(std::ostream& os, const AccelCurve& obj) {
     os << "AccelCurve ";
@@ -252,51 +258,54 @@ class AccelCurve {
 
  public:
   /**
-   * @brief 走行距離の拘束から達しうる終点速度を算出する関数
-   * @param[in] j_max 最大躍度の大きさ [m/s/s/s], 正であること
-   * @param[in] a_max 最大加速度の大きさ [m/s/s], 正であること
-   * @param[in] vs    始点速度 [m/s]
-   * @param[in] vt    目標速度 [m/s]
-   * @param[in] d     走行距離 [m]
-   * @return ve       終点速度 [m/s]
+   * @brief End velocity reachable under the distance constraint.
+   * @param[in] j_max Magnitude of maximum jerk [m/s/s/s], must be
+   * positive.
+   * @param[in] a_max Magnitude of maximum acceleration [m/s/s], must be
+   * positive.
+   * @param[in] vs    Start velocity [m/s].
+   * @param[in] vt    Target velocity [m/s].
+   * @param[in] d     Travel distance [m].
+   * @return ve       End velocity [m/s].
    */
   static float calcReachableVelocityEnd(const float j_max, const float a_max,
                                         const float vs, const float vt,
                                         const float d) {
-    /* 速度が曲線となる部分の時間を決定 */
+    /* duration of the curved velocity section */
     const auto tc = a_max / j_max;
-    /* 最大加速度の符号を決定 */
+    /* sign of max acceleration */
     const auto am = (vt > vs) ? a_max : -a_max;
     const auto jm = (vt > vs) ? j_max : -j_max;
-    /* 等加速度直線運動の有無で分岐 */
+    /* branch on whether constant acceleration occurs */
     const auto d_triangle = (vs + am * tc / 2) * tc;  //< distance @ tm == 0
     const auto v_triangle = jm / am * d - vs;         //< v_end @ tm == 0
     // ctrl_logd << "d_tri: " << d_triangle << std::endl;
     // ctrl_logd << "v_tri: " << v_triangle << std::endl;
     if (d * v_triangle > 0 && std::abs(d) > std::abs(d_triangle)) {
-      /* 曲線・直線・曲線 */
+      /* curve - straight - curve */
       ctrl_logd << "v: curve - straight - curve" << std::endl;
-      /* 2次方程式の解の公式を解く */
+      /* solve the quadratic equation */
       const auto amtc = am * tc;
       const auto D = amtc * amtc - 4 * (amtc * vs - vs * vs - 2 * am * d);
       const auto sqrtD = std::sqrt(D);
       return (-amtc + (d > 0 ? sqrtD : -sqrtD)) / 2;
     }
-    /* 曲線・曲線 (走行距離が短すぎる) */
-    /* 3次方程式を解いて、終点速度を算出;
-     * 簡単のため、値を一度すべて正に変換して、計算結果に符号を付与して返送 */
+    /* curve - curve (travel distance too short) */
+    /* solve the cubic equation for the end velocity;
+     * for simplicity, convert all values to positive, then reapply
+     * the sign to the result */
     const auto a = std::abs(vs);
     const auto b = (d > 0 ? 1 : -1) * jm * d * d;
     const auto aaa_27 = a * a * a / 27;
     const auto cr = 8 * aaa_27 + b / 2;
     const auto ci_b = 8 * aaa_27 / b + 1.0f / 4;
     if (ci_b >= 0) {
-      /* ルートの中が非負のとき、3乗根により解を求める */
+      /* non-negative radicand: solve via cube root */
       ctrl_logd << "v: curve - curve (accel)" << std::endl;
       const auto c = std::cbrt(cr + std::abs(b) * std::sqrt(ci_b));
       return (d > 0 ? 1 : -1) * (c + 4 * a * a / c / 9 - a / 3);
     } else {
-      /* ルートの中が負のとき、極座標変換して解を求める */
+      /* negative radicand: solve via polar conversion */
       ctrl_logd << "v: curve - curve (decel)" << std::endl;
       const auto ci = std::abs(b) * std::sqrt(-ci_b);
       const auto r = std::hypot(cr, ci);  //< = sqrt(cr^2 + ci^2)
@@ -305,67 +314,72 @@ class AccelCurve {
     }
   }
   /**
-   * @brief 走行距離の拘束から達しうる最大速度を算出する関数
-   * @param[in] j_max 最大躍度の大きさ [m/s/s/s], 正であること
-   * @param[in] a_max 最大加速度の大きさ [m/s/s], 正であること
-   * @param[in] vs    始点速度 [m/s]
-   * @param[in] ve    終点速度 [m/s]
-   * @param[in] d     走行距離 [m]
-   * @return vm       最大速度 [m/s]
+   * @brief Maximum velocity reachable under the distance constraint.
+   * @param[in] j_max Magnitude of maximum jerk [m/s/s/s], must be
+   * positive.
+   * @param[in] a_max Magnitude of maximum acceleration [m/s/s], must be
+   * positive.
+   * @param[in] vs    Start velocity [m/s].
+   * @param[in] ve    End velocity [m/s].
+   * @param[in] d     Travel distance [m].
+   * @return vm       Maximum velocity [m/s].
    */
   static float calcReachableVelocityMax(const float j_max, const float a_max,
                                         const float vs, const float ve,
                                         const float d) {
-    /* 速度が曲線となる部分の時間を決定 */
+    /* duration of the curved velocity section */
     const auto tc = a_max / j_max;
-    const auto am = (d > 0) ? a_max : -a_max;  //< 加速方向は移動方向に依存
-    /* 2次方程式の解の公式を解く */
+    const auto am = (d > 0) ? a_max : -a_max;  //< direction of travel
+    /* solve the quadratic equation */
     const auto amtc = am * tc;
     const auto D = amtc * amtc - 2 * (vs + ve) * amtc + 4 * am * d +
                    2 * (vs * vs + ve * ve);
     if (D < 0) {
-      /* 拘束条件がおかしい */
+      /* inconsistent constraints */
       ctrl_loge << "Error! D = " << D << " < 0" << std::endl;
-      /* 入力のチェック */
+      /* input check */
       if (vs * ve < 0)
         ctrl_loge << "Invalid Input! vs: " << vs << ", ve: " << ve << std::endl;
       return vs;
     }
     const auto sqrtD = std::sqrt(D);
-    return (-amtc + (d > 0 ? sqrtD : -sqrtD)) / 2;  //< 2次方程式の解
+    return (-amtc + (d > 0 ? sqrtD : -sqrtD)) / 2;  //< quadratic solution
   }
   /**
-   * @brief 速度差の拘束から達しうる変位を算出する関数
-   * @param[in] j_max   最大躍度の大きさ [m/s/s/s], 正であること
-   * @param[in] a_max   最大加速度の大きさ [m/s/s], 正であること
-   * @param[in] v_start 始点速度 [m/s]
-   * @param[in] v_end   終点速度 [m/s]
-   * @return d          変位 [m]
+   * @brief Displacement reachable under the velocity-difference
+   * constraint.
+   * @param[in] j_max   Magnitude of maximum jerk [m/s/s/s], must be
+   * positive.
+   * @param[in] a_max   Magnitude of maximum acceleration [m/s/s], must
+   * be positive.
+   * @param[in] v_start Start velocity [m/s].
+   * @param[in] v_end   End velocity [m/s].
+   * @return d          Displacement [m].
    */
   static float calcDistanceFromVelocityStartToEnd(const float j_max,
                                                   const float a_max,
                                                   const float v_start,
                                                   const float v_end) {
-    /* キャッシュ */
+    /* cache */
     const auto ve_minus_vs = v_end - v_start;
-    /* 符号付きで代入 */
+    /* assign with sign */
     const auto am = (ve_minus_vs > 0) ? a_max : -a_max;
     const auto jm = (ve_minus_vs > 0) ? j_max : -j_max;
-    /* 速度が曲線となる部分の時間を決定 */
+    /* duration of the curved velocity section */
     const auto tc = a_max / j_max;
-    /* 等加速度直線運動の時間を決定 */
+    /* duration of the constant-acceleration section */
     const auto tm = ve_minus_vs / am - tc;
-    /* 始点から終点までの時間を決定 */
+    /* duration from start to end */
     const auto t_all =
         (tm > 0) ? (tc + tm + tc) : (2 * std::sqrt(ve_minus_vs / jm));
-    return (v_start + v_end) / 2 * t_all;  //< 速度グラフの面積により
+    return (v_start + v_end) / 2 * t_all;  //< area of the velocity graph
   }
 
  protected:
-  float jm;             /**< @brief 躍度定数 [m/s/s/s] */
-  float am;             /**< @brief 加速度定数 [m/s/s] */
-  float t0, t1, t2, t3; /**< @brief 時刻定数 [s] */
-  float v0, v1, v2, v3; /**< @brief 速度定数 [m/s] */
-  float x0, x1, x2, x3; /**< @brief 位置定数 [m] */
+  float jm;             /**< @brief Jerk constant [m/s/s/s]. */
+  float am;             /**< @brief Acceleration constant [m/s/s]. */
+  float t0, t1, t2, t3; /**< @brief Time constants [s]. */
+  float v0, v1, v2, v3; /**< @brief Velocity constants [m/s]. */
+  float x0, x1, x2, x3; /**< @brief Position constants [m]. */
 };
 }  // namespace ctrl

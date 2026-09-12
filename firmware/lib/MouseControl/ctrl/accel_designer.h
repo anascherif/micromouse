@@ -1,9 +1,10 @@
 /**
  * @file accel_designer.h
- * @brief 距離の拘束を満たす加減速走行軌道を生成するクラスを保持するファイル
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Trajectory generator for acceleration/deceleration runs under
+ * distance constraints.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  * @see https://www.kerislab.jp/posts/2018-04-29-accel-designer4/
  */
 #pragma once
@@ -17,32 +18,38 @@
 #include "accel_curve.h"
 
 /**
- * @brief 制御関係の名前空間
+ * @brief Control-related namespace.
  */
 namespace ctrl {
 
 /**
- * @brief 拘束条件を満たす曲線加減速の軌道を生成するクラス
+ * @brief Generates curved acceleration/deceleration trajectories
+ * satisfying given constraints.
  *
- * - 目標速度や移動距離などの拘束条件を満たす曲線加速軌道を生成する
- * - 任意の時刻 $t$ における躍度 $j(t)$、加速度 $a(t)$、速度 $v(t)$、位置 $x(t)$
- * を返す連続な関数を提供する
- * - 最大加速度 $a_{\\max}$ と始点速度 $v_s$
- * など拘束次第では目標速度 $v_t$ に達することができない場合があるので注意する
+ * - Generates a curved acceleration trajectory meeting constraints
+ * like target velocity and travel distance.
+ * - Provides continuous functions returning jerk $j(t)$, acceleration
+ * $a(t)$, velocity $v(t)$, and position $x(t)$ at any time $t$.
+ * - Depending on constraints such as max acceleration $a_{\\max}$ and
+ * start velocity $v_s$, the target velocity $v_t$ may not be
+ * reachable.
  */
 class AccelDesigner {
  public:
   /**
-   * @brief 初期化付きコンストラクタ
+   * @brief Constructor with initialization.
    *
-   * @param[in] j_max     最大躍度の大きさ [m/s/s/s]、正であること
-   * @param[in] a_max     最大加速度の大きさ [m/s/s], 正であること
-   * @param[in] v_max     最大速度の大きさ [m/s]、正であること
-   * @param[in] v_start   始点速度 [m/s]
-   * @param[in] v_target  目標速度 [m/s]
-   * @param[in] dist      移動距離 [m]
-   * @param[in] x_start   始点位置 [m] (オプション)
-   * @param[in] t_start   始点時刻 [s] (オプション)
+   * @param[in] j_max     Magnitude of maximum jerk [m/s/s/s], must be
+   * positive.
+   * @param[in] a_max     Magnitude of maximum acceleration [m/s/s],
+   * must be positive.
+   * @param[in] v_max     Magnitude of maximum velocity [m/s], must be
+   * positive.
+   * @param[in] v_start   Start velocity [m/s].
+   * @param[in] v_target  Target velocity [m/s].
+   * @param[in] dist      Travel distance [m].
+   * @param[in] x_start   Start position [m] (optional).
+   * @param[in] t_start   Start time [s] (optional).
    */
   AccelDesigner(const float j_max, const float a_max, const float v_max,
                 const float v_start, const float v_target, const float dist,
@@ -50,92 +57,95 @@ class AccelDesigner {
     reset(j_max, a_max, v_max, v_start, v_target, dist, x_start, t_start);
   }
   /**
-   * @brief とりあえずインスタンス化を行う空のコンストラクタ
-   * @attention 別途 reset() により初期化すること。
+   * @brief Empty constructor for instantiation only.
+   * @attention Must be initialized with reset() afterwards.
    */
   AccelDesigner() { t0 = t1 = t2 = t3 = x0 = x3 = 0; }
   /**
-   * @brief 引数の拘束条件から曲線を生成する関数
+   * @brief Generate the curve from the given constraints.
    *
-   * @details この関数によってもれなくすべての変数が初期化される。
-   * @param[in] j_max     最大躍度の大きさ [m/s/s/s]、正であること
-   * @param[in] a_max     最大加速度の大きさ [m/s/s], 正であること
-   * @param[in] v_max     最大速度の大きさ [m/s]、正であること
-   * @param[in] v_start   始点速度 [m/s]
-   * @param[in] v_target  目標速度 [m/s]
-   * @param[in] dist      移動距離 [m]
-   * @param[in] x_start   始点位置 [m] (オプション)
-   * @param[in] t_start   始点時刻 [s] (オプション)
+   * @details Initializes all internal variables.
+   * @param[in] j_max     Magnitude of maximum jerk [m/s/s/s], must be
+   * positive.
+   * @param[in] a_max     Magnitude of maximum acceleration [m/s/s],
+   * must be positive.
+   * @param[in] v_max     Magnitude of maximum velocity [m/s], must be
+   * positive.
+   * @param[in] v_start   Start velocity [m/s].
+   * @param[in] v_target  Target velocity [m/s].
+   * @param[in] dist      Travel distance [m].
+   * @param[in] x_start   Start position [m] (optional).
+   * @param[in] t_start   Start time [s] (optional).
    */
   void reset(const float j_max, const float a_max, const float v_max,
              const float v_start, const float v_target, const float dist,
              const float x_start = 0, const float t_start = 0) {
-    /* 目標速度に到達可能か、走行距離から終点速度を決定していく */
-    auto v_end = v_target;  //< 仮代入
-    /* 移動距離の拘束により、目標速度に達し得ない場合の処理 */
+    /* determine the end velocity from the travel distance */
+    auto v_end = v_target;  //< tentative assignment
+    /* handle the case where the distance forbids reaching v_target */
     const auto dist_min = AccelCurve::calcDistanceFromVelocityStartToEnd(
         j_max, a_max, v_start, v_end);
     if (std::abs(dist) < std::abs(dist_min)) {
       ctrl_logd << "vs -> ve != vt" << std::endl;
-      /* 目標速度$v_t$に向かい、走行距離$d$で到達し得る終点速度$v_e$を算出 */
+      /* end velocity $v_e$ reachable over distance $d$ toward $v_t$ */
       v_end = AccelCurve::calcReachableVelocityEnd(j_max, a_max, v_start,
                                                    v_target, dist);
     }
-    /* 飽和速度の仮置き */
+    /* tentative saturation velocity */
     auto v_sat = dist > 0 ? std::max({v_start, v_max, v_end})
                           : std::min({v_start, -v_max, v_end});
-    /* 曲線を生成 */
-    ac.reset(j_max, a_max, v_start, v_sat);  //< 加速部分
-    dc.reset(j_max, a_max, v_sat, v_end);    //< 減速部分
-    /* 最大速度まで加速すると走行距離の拘束を満たさない場合の処理 */
+    /* generate the curve */
+    ac.reset(j_max, a_max, v_start, v_sat);  //< acceleration section
+    dc.reset(j_max, a_max, v_sat, v_end);    //< deceleration section
+    /* handle the case where reaching v_max violates the distance */
     const auto d_sum = ac.x_end() + dc.x_end();
     if (std::abs(dist) < std::abs(d_sum)) {
       ctrl_logd << "vs -> vr -> ve" << std::endl;
-      /* 走行距離などの拘束から到達可能速度を算出 */
+      /* reachable velocity from constraints like travel distance */
       const auto v_rm = AccelCurve::calcReachableVelocityMax(
           j_max, a_max, v_start, v_end, dist);
-      /* 無駄な減速を回避 */
+      /* avoid unnecessary deceleration */
       v_sat = dist > 0 ? std::max({v_start, v_rm, v_end})
                        : std::min({v_start, v_rm, v_end});
-      ac.reset(j_max, a_max, v_start, v_sat);  //< 加速
-      dc.reset(j_max, a_max, v_sat, v_end);    //< 減速
+      ac.reset(j_max, a_max, v_start, v_sat);  //< acceleration
+      dc.reset(j_max, a_max, v_sat, v_end);    //< deceleration
     }
-    /* t23 = nan 回避; vs = ve = d = 0 のときに発生 */
+    /* avoid t23 = nan; occurs for vs = ve = d = 0 */
     if (std::abs(v_sat) < std::numeric_limits<float>::epsilon()) v_sat = 1;
-    /* 各定数の算出 */
+    /* compute the constants */
     const auto t23 = (dist - ac.x_end() - dc.x_end()) / v_sat;
     x0 = x_start;
     x3 = x_start + dist;
     t0 = t_start;
-    t1 = t0 + ac.t_end();                     //< 曲線加速終了の時刻
-    t2 = t0 + ac.t_end() + t23;               //< 等速走行終了の時刻
-    t3 = t0 + ac.t_end() + t23 + dc.t_end();  //< 曲線減速終了の時刻
+    t1 = t0 + ac.t_end();                     //< end of curved accel
+    t2 = t0 + ac.t_end() + t23;               //< end of constant speed
+    t3 = t0 + ac.t_end() + t23 + dc.t_end();  //< end of curved decel
 #if 0
-    /* 出力のチェック */
-    const auto e = 0.01f;  //< 数値誤差分
+    /* output check */
+    const auto e = 0.01f;  //< numerical tolerance
     bool show_info = false;
-    /* 飽和速度時間 */
+    /* saturation time */
     if (t23 < 0) {
       ctrl_logd << t23 << std::endl;
       show_info = true;
     }
-    /* 終点速度 */
+    /* end velocity */
     if (std::abs(v_start - v_end) > e + std::abs(v_start - v_target)) {
       std::cerr << "Error: Velocity Target!" << std::endl;
       show_info = true;
     }
-    /* 飽和速度 */
+    /* saturation velocity */
     if (std::abs(v_sat) >
         e + std::max({v_max, std::abs(v_start), std::abs(v_end)})) {
       std::cerr << "Error: Velocity Saturation!" << std::endl;
       show_info = true;
     }
-    /* タイムスタンプ */
+    /* timestamps */
     if (!(t0 <= t1 + e && t1 <= t2 + e && t2 <= t3 + e)) {
       ctrl_loge << "Error: Time Point Relationship!" << std::endl;
       show_info = true;
     }
-    /* 入力情報の表示 */
+    /* print the inputs */
     if (show_info) {
       ctrl_loge << "Constraints:"
                 << "\tj_max: " << j_max << "\ta_max: " << a_max
@@ -145,7 +155,7 @@ class AccelDesigner {
       ctrl_loge << "ad.reset(" << j_max << ", " << a_max << ", " << v_max
                 << ", " << v_start << ", " << v_target << ", " << dist << ");"
                 << std::endl;
-      /* 表示 */
+      /* print */
       ctrl_loge << "Time Stamp: "
                 << "\tt0: " << t0 << "\tt1: " << t1 << "\tt2: " << t2
                 << "\tt3: " << t3 << std::endl;
@@ -160,9 +170,9 @@ class AccelDesigner {
 #endif
   }
   /**
-   * @brief 任意の時刻 t [s] における躍度 j [m/s/s/s] を返す関数
-   * @param[in] 時刻 t [s]
-   * @return 躍度 [m/s/s/s]
+   * @brief Jerk j [m/s/s/s] at time t [s].
+   * @param[in] Time t [s].
+   * @return Jerk [m/s/s/s].
    */
   float j(const float t) const {
     if (t < t2)
@@ -171,9 +181,9 @@ class AccelDesigner {
       return dc.j(t - t2);
   }
   /**
-   * @brief 任意の時刻 t [s] における加速度 a [m/s/s] を返す関数
-   * @param[in] 時刻 t [s]
-   * @return 加速度 [m/s/s]
+   * @brief Acceleration a [m/s/s] at time t [s].
+   * @param[in] Time t [s].
+   * @return Acceleration [m/s/s].
    */
   float a(const float t) const {
     if (t < t2)
@@ -182,9 +192,9 @@ class AccelDesigner {
       return dc.a(t - t2);
   }
   /**
-   * @brief 任意の時刻 t [s] における速度 v [m/s] を返す関数
-   * @param[in] 時刻 t [s]
-   * @return 速度 [m/s]
+   * @brief Velocity v [m/s] at time t [s].
+   * @param[in] Time t [s].
+   * @return Velocity [m/s].
    */
   float v(const float t) const {
     if (t < t2)
@@ -193,9 +203,9 @@ class AccelDesigner {
       return dc.v(t - t2);
   }
   /**
-   * @brief 任意の時刻 t [s] における位置 x [m] を返す関数
-   * @param[in] 時刻 t [s]
-   * @return 位置 [m]
+   * @brief Position x [m] at time t [s].
+   * @param[in] Time t [s].
+   * @return Position [m].
    */
   float x(const float t) const {
     if (t < t2)
@@ -204,35 +214,35 @@ class AccelDesigner {
       return x3 - dc.x_end() + dc.x(t - t2);
   }
   /**
-   * @brief 終点時刻 [s]
+   * @brief End time [s].
    */
   float t_end() const { return t3; }
   /**
-   * @brief 終点速度 [m/s]
+   * @brief End velocity [m/s].
    */
   float v_end() const { return dc.v_end(); }
   /**
-   * @brief 終点位置 [m]
+   * @brief End position [m].
    */
   float x_end() const { return x3; }
   /**
-   * @brief 曲線加速の開始時刻 [s]
+   * @brief Start time of the curved acceleration [s].
    */
   float t_0() const { return t0; }
   /**
-   * @brief 最高速度に達する時刻 [s]
+   * @brief Time of maximum velocity [s].
    */
   float t_1() const { return t1; }
   /**
-   * @brief 曲線減速の開始時刻 [s]
+   * @brief Start time of the curved deceleration [s].
    */
   float t_2() const { return t2; }
   /**
-   * @brief 曲線減速の終了時刻 [s]
+   * @brief End time of the curved deceleration [s].
    */
   float t_3() const { return t3; }
   /**
-   * @brief 曲線加速の境界のタイムスタンプを取得
+   * @brief Boundary timestamps of the curved sections.
    */
   const std::array<float, 8> getTimeStamps() const {
     return {{
@@ -247,13 +257,13 @@ class AccelDesigner {
     }};
   }
   /**
-   * @brief stdout に軌道のcsvを出力する関数。
+   * @brief Print the trajectory as CSV to stdout.
    */
   void printCsv(const float t_interval = 1e-3f) const {
     printCsv(std::cout, t_interval);
   }
   /**
-   * @brief std::ostream に軌道のcsvを出力する関数。
+   * @brief Print the trajectory as CSV to a std::ostream.
    */
   void printCsv(std::ostream& os, const float t_interval = 1e-3f) const {
     for (float t = t0; t < t_end(); t += t_interval)
@@ -261,7 +271,7 @@ class AccelDesigner {
          << std::endl;
   }
   /**
-   * @brief 情報の表示
+   * @brief Print the object information.
    */
   friend std::ostream& operator<<(std::ostream& os, const AccelDesigner& obj) {
     os << "AccelDesigner:";
@@ -277,10 +287,10 @@ class AccelDesigner {
   }
 
  protected:
-  float t0, t1, t2, t3; /**< @brief 境界点の時刻 [s] */
-  float x0, x3;         /**< @brief 境界点の位置 [m] */
-  AccelCurve ac;        /**< @brief 曲線加速用オブジェクト */
-  AccelCurve dc;        /**< @brief 曲線減速用オブジェクト */
+  float t0, t1, t2, t3; /**< @brief Boundary times [s]. */
+  float x0, x3;         /**< @brief Boundary positions [m]. */
+  AccelCurve ac;        /**< @brief Curved acceleration object. */
+  AccelCurve dc;        /**< @brief Curved deceleration object. */
 };
 
 }  // namespace ctrl
