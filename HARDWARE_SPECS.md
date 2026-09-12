@@ -11,7 +11,7 @@ This document captures all hardware specifications, datasheet extracts, and meas
 |-----------|-------|-----|-------|
 | Microcontroller | ESP32 DevKit V1 (CP2102) | 1 | Arduino framework |
 | Motors | N20 12V 1000 RPM + Encoder | 2 | 30:1 gearbox, 6-wire (VCC/GND/A/B/M+/M-) |
-| Wheels | Pololu N20 32×7 mm | 2 | 32 mm diameter, 3 mm bore |
+| Wheels | N20 drive wheels | 2 | 43 mm diameter (measured) |
 | Caster | W420 metal ball | 1 | 42 mm diameter |
 | Motor Driver | TB6612FNG (Pololu #713) | 1 | Dual H-bridge, 1.2A cont / 3A peak |
 | IMU | GY-521 (MPU6050) | 1 | I²C 0x68, 400 kHz |
@@ -31,16 +31,16 @@ This document captures all hardware specifications, datasheet extracts, and meas
 | Encoder CPR (motor shaft) | — | 12 | CPR | Pololu encoder spec |
 | Encoder CPR (output shaft) | — | 360 | CPR | 12 × 30 |
 | Encoder counts (quadrature) | `MACHINE_ENCODER_CPR` | 1440 | counts/rev | 48 × 30 |
-| Wheel Diameter | `MACHINE_WHEEL_DIAMETER` | 32.0 | mm | Pololu wheel spec |
-| Track Width | `MACHINE_TRACK` | 125.0 | mm | **Measured** (wheel center-to-center) |
-| Rotation Radius | `MACHINE_ROTATION_RADIUS` | 62.5 | mm | Track / 2 |
-| Tail Length | `MACHINE_TAIL_LENGTH` | 83.0 | mm | **Measured** (drive axle → front HC-SR04) |
+| Wheel Diameter | `MACHINE_WHEEL_DIAMETER` | 43.0 | mm | **Measured** |
+| Track Width | `MACHINE_TRACK` | 103.0 | mm | **Measured** (wheel center-to-center) |
+| Rotation Radius | `MACHINE_ROTATION_RADIUS` | 51.5 | mm | Track / 2 |
+| Tail Length | `MACHINE_TAIL_LENGTH` | 75.0 | mm | **Measured** (drive axle → front HC-SR04) |
 | Wheelbase (robot length) | — | 100 | mm | Chassis |
 | Robot Width | — | 100 | mm | Chassis |
 
 ### Derived Constants
 ```
-ENC_MM_PER_COUNT = (32.0 * π * 30) / 1440 ≈ 2.094 mm/count
+ENC_MM_PER_COUNT = (43.0 * π * 30) / 1440 ≈ 2.814 mm/count
 ```
 
 ---
@@ -98,9 +98,9 @@ ENC_MM_PER_COUNT = (32.0 * π * 30) / 1440 ≈ 2.094 mm/count
 | Resolution | 3 mm |
 | Beam Angle | 15° half-angle (30° full cone) |
 | Trigger Pulse | 10 µs |
-| Echo Timeout | 23200 µs (4 m round-trip) |
+| Echo Timeout | 25000 µs (~4.3 m round-trip) |
 | Speed of Sound | 0.343 mm/µs (20°C) |
-| Mounting | Left (13/14), Front (27/26), Right (33/34) |
+| Mounting | Left (33/32), Front (19/21), Right (26/25) |
 
 ### MPU6050 IMU (GY-521)
 | Parameter | Value |
@@ -120,7 +120,7 @@ ENC_MM_PER_COUNT = (32.0 * π * 30) / 1440 ≈ 2.094 mm/count
 | PPR (motor shaft) | 12 CPR |
 | Output | Digital A/B, 2.7–18V, 10 kΩ pull-ups |
 | Cable | 6-wire (VCC, GND, A, B, M+, M-) |
-| Interface | ESP32 PCNT (GPIO 36/39, 22/21) |
+| Interface | ESP32 PCNT (GPIO 35/34 left, 36/39 right) |
 | PCNT Units | 0 (left), 1 (right) |
 
 ---
@@ -129,30 +129,30 @@ ENC_MM_PER_COUNT = (32.0 * π * 30) / 1440 ≈ 2.094 mm/count
 
 | Function | GPIO | Notes |
 |----------|------|-------|
-| US_LEFT_TRIG | 13 | HC-SR04 Left |
-| US_LEFT_ECHO | 14 | |
-| US_FRONT_TRIG | 27 | HC-SR04 Front |
-| US_FRONT_ECHO | 26 | |
-| US_RIGHT_TRIG | 33 | HC-SR04 Right |
-| US_RIGHT_ECHO | 34 | |
-| MOTOR_L_IN1 | 25 | TB6612 AIN1 |
-| MOTOR_L_IN2 | 32 | TB6612 AIN2 |
-| MOTOR_L_PWM | 18 | TB6612 PWMA (LEDC ch0) |
-| MOTOR_R_IN1 | 19 | TB6612 BIN1 |
-| MOTOR_R_IN2 | 23 | TB6612 BIN2 |
-| MOTOR_R_PWM | 5 | TB6612 PWMB (LEDC ch1) |
-| ENC_L_A | 36 | PCNT unit 0 |
-| ENC_L_B | 39 | PCNT unit 0 |
-| ENC_R_A | 22 | PCNT unit 1 |
-| ENC_R_B | 21 | PCNT unit 1 |
+| US_LEFT_TRIG | 33 | HC-SR04 Left |
+| US_LEFT_ECHO | 32 | |
+| US_FRONT_TRIG | 19 | HC-SR04 Front |
+| US_FRONT_ECHO | 21 | |
+| US_RIGHT_TRIG | 26 | HC-SR04 Right |
+| US_RIGHT_ECHO | 25 | |
+| MOTOR_L_IN1 | 16 | TB6612 AIN1 |
+| MOTOR_L_IN2 | 4 | TB6612 AIN2 (shared with BUZZER) |
+| MOTOR_L_PWM | — | TB6612 PWMA — commented out in config.h, pick a free GPIO |
+| MOTOR_R_IN1 | 18 | TB6612 BIN1 (shared with LED_2) |
+| MOTOR_R_IN2 | 17 | TB6612 BIN2 |
+| MOTOR_R_PWM | — | TB6612 PWMB — commented out in config.h, pick a free GPIO |
+| ENC_L_A | 35 | PCNT unit 0 (shared with BAT_ADC) |
+| ENC_L_B | 34 | PCNT unit 0 |
+| ENC_R_A | 36 | PCNT unit 1 |
+| ENC_R_B | 39 | PCNT unit 1 |
 | IMU_SDA | 21 | I²C |
 | IMU_SCL | 22 | I²C |
-| BAT_ADC | 35 | ADC1_CH7 |
-| BUZZER | 4 | LEDC ch2 |
+| BAT_ADC | 35 | ADC1_CH7 (shared with ENC_L_A) |
+| BUZZER | 4 | LEDC ch2 (shared with MOTOR_L_IN2) |
 | LED_0 (onboard) | 2 | |
-| LED_1 | 5 | Shared with MOTOR_R_PWM |
-| LED_2 | 18 | Shared with MOTOR_L_PWM |
-| LED_3 | 19 | Shared with MOTOR_R_IN1 |
+| LED_1 | 5 | |
+| LED_2 | 18 | Shared with MOTOR_R_IN1 |
+| LED_3 | 19 | Shared with US_FRONT_TRIG |
 | BUTTON (BOOT) | 0 | Active LOW |
 
 ---
@@ -163,10 +163,10 @@ ENC_MM_PER_COUNT = (32.0 * π * 30) / 1440 ≈ 2.094 mm/count
 // Mechanical
 #define MACHINE_GEAR_RATIO       (30.0f / 1.0f)
 #define MACHINE_ENCODER_CPR      (12 * 30 * 4)   // = 1440
-#define MACHINE_WHEEL_DIAMETER   32.0f
-#define MACHINE_TRACK            125.0f
-#define MACHINE_ROTATION_RADIUS  (MACHINE_TRACK / 2.0f)  // 62.5
-#define MACHINE_TAIL_LENGTH      83.0f
+#define MACHINE_WHEEL_DIAMETER   43.0f
+#define MACHINE_TRACK            103.0f
+#define MACHINE_ROTATION_RADIUS  (MACHINE_TRACK / 2.0f)  // 51.5
+#define MACHINE_TAIL_LENGTH      75.0f
 #define SEGMENT_WIDTH            180.0f
 #define WALL_THICKNESS           12.0f
 #define USE_SLALOM_TURNS         1
@@ -179,7 +179,7 @@ ENC_MM_PER_COUNT = (32.0 * π * 30) / 1440 ≈ 2.094 mm/count
 #define LEDC_MOTOR_FREQ_HZ       20000
 
 // Sensors
-#define US_ECHO_TIMEOUT_US       23200
+#define US_ECHO_TIMEOUT_US       25000
 #define US_SPEED_OF_SOUND_MM_US  0.343
 #define WALL_THRESHOLD_SIDE_MM   70
 #define WALL_THRESHOLD_FRONT_MM  120
@@ -193,7 +193,7 @@ ENC_MM_PER_COUNT = (32.0 * π * 30) / 1440 ≈ 2.094 mm/count
 
 ### Derived Constants
 ```c
-ENC_MM_PER_COUNT = (32.0 * π * 30) / 1440 ≈ 2.094 mm/count
+ENC_MM_PER_COUNT = (43.0 * π * 30) / 1440 ≈ 2.814 mm/count
 ```
 
 ---
@@ -223,12 +223,12 @@ _defaults() {
 1. Place robot on flat surface
 2. Measure distance between **wheel contact patches** (center of tread)
 3. Use digital calipers
-4. Expected: ~125 mm
+4. Expected: ~103 mm
 
 ### Tail Length
 1. Identify drive wheel axle centerline (rear wheels)
 2. Measure along robot centerline to front face of HC-SR04 sensor
-3. Expected: 83 mm
+3. Expected: 75 mm
 
 ### Gear Ratio Verification (Optional)
 1. Upload `gear_ratio_test` sketch
@@ -273,13 +273,13 @@ XL4015 OUT- ──────────────────────�
 └── Encoder GND (both)
 
 ESP32 GPIO:
-  13/14  ── US_LEFT_TRIG/ECHO
-  27/26  ── US_FRONT_TRIG/ECHO
-  33/34  ── US_RIGHT_TRIG/ECHO
-  25/32/18 ── MOTOR_L_IN1/IN2/PWM (LEDC ch0)
-  19/23/5  ── MOTOR_R_IN1/IN2/PWM (LEDC ch1)
-  36/39  ── ENC_L_A/B (PCNT unit 0)
-  22/21  ── ENC_R_A/B (PCNT unit 1)
+  33/32  ── US_LEFT_TRIG/ECHO
+  19/21  ── US_FRONT_TRIG/ECHO
+  26/25  ── US_RIGHT_TRIG/ECHO
+  16/4/— ── MOTOR_L_IN1/IN2/PWM (PWM not yet assigned)
+  18/17/— ── MOTOR_R_IN1/IN2/PWM (PWM not yet assigned)
+  35/34  ── ENC_L_A/B (PCNT unit 0)
+  36/39  ── ENC_R_A/B (PCNT unit 1)
   21/22  ── I2C SDA/SCL (MPU6050)
   35     ── BAT_ADC (voltage divider)
   4      ── BUZZER (LEDC ch2)
@@ -305,8 +305,8 @@ ESP32 GPIO:
 ## Competition Checklist
 
 - [ ] Gear ratio verified (30:1)
-- [ ] Track width measured (125 mm)
-- [ ] Tail length measured (83 mm)
+- [ ] Track width measured (103 mm)
+- [ ] Tail length measured (75 mm)
 - [ ] XL4015 set to 5.0V under load
 - [ ] Battery divider calibrated
 - [ ] ADC reference voltage confirmed
@@ -324,3 +324,4 @@ ESP32 GPIO:
 | Date | Revision | Changes |
 |------|----------|---------|
 | 2026-09-08 | 1.0 | Initial release with 30:1 gear ratio, 125mm track, 83mm tail |
+| 2026-09-12 | 1.1 | Synced to config.h: wheel 43mm, track 103mm, tail 75mm; new pin mapping (sonars, motors, encoders), PWM pins TBD |
