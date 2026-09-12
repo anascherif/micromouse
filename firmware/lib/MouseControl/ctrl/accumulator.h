@@ -1,9 +1,9 @@
 /**
  * @file accumulator.h
- * @brief リングバッファにより一定数のデータを蓄積するクラスを定義
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2019-02-02
- * @copyright Copyright 2019 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Ring buffer accumulating a fixed number of samples.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
@@ -12,16 +12,16 @@
 namespace ctrl {
 
 /**
- * @brief データの蓄積器
- * @tparam T データの型
- * @tparam S 蓄積するデータの数
+ * @brief Data accumulator.
+ * @tparam T Data type.
+ * @tparam S Number of samples to hold.
  */
 template <typename T, std::size_t S>
 class Accumulator {
  public:
   /**
-   * @brief コンストラクタ
-   * @param[in] value バッファ内の全データに代入する初期値
+   * @brief Constructor.
+   * @param[in] value Initial value assigned to every buffer slot.
    */
   Accumulator(const T& value = T()) {
     buffer = new T[S];
@@ -29,36 +29,36 @@ class Accumulator {
     clear(value);
   }
   /**
-   * @brief デストラクタ
+   * @brief Destructor.
    */
   ~Accumulator() { delete[] buffer; }
   /**
-   * @brief バッファをクリアする関数
-   * @param[in] value 代入する値
+   * @brief Reset the buffer.
+   * @param[in] value Value to assign.
    */
   void clear(const T& value = T()) {
     for (int i = 0; i < S; i++) buffer[i] = value;
   }
   /**
-   * @brief 最新のデータを追加する関数
+   * @brief Append the latest sample.
    */
   void push(const T& value) {
     head = (head + 1) % S;
     buffer[head] = value;
   }
   /**
-   * @brief 直近 index 番目の値を取得するオペレータ
-   * @details [0] 番目が最新のデータ、[size() - 1] 番目が最古のデータ
-   * @param[in] index 直近何番目のデータかを指すインデックス
-   * @return 直近 index 番目のデータ
+   * @brief Access the most recent sample at the given offset.
+   * @details [0] is the newest sample, [size() - 1] the oldest.
+   * @param[in] index Offset from the newest sample.
+   * @return The requested sample.
    */
   const T& operator[](const std::size_t index) const {
     return buffer[(S + head - index) % S];
   }
   /**
-   * @brief 直近 n 個の平均を取得する関数
-   * @param[in] n 平均個数
-   * @return 平均値
+   * @brief Average of the n most recent samples.
+   * @param[in] n Number of samples to average.
+   * @return Average value.
    */
   const T average(const int n = S) const {
     T sum = T();
@@ -68,13 +68,13 @@ class Accumulator {
     return sum / n;
   }
   /**
-   * @brief リングバッファのサイズを返す関数
+   * @brief Ring buffer size.
    */
   std::size_t size() const { return S; }
 
  private:
-  T* buffer; /**< @brief リングバッファとして使う配列のポインタ */
-  std::size_t head; /**< @brief リングバッファの先頭インデックス */
+  T* buffer; /**< @brief Pointer to the ring buffer array. */
+  std::size_t head; /**< @brief Head index of the ring buffer. */
 };
 
 }  // namespace ctrl

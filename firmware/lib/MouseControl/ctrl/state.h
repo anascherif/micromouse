@@ -1,27 +1,27 @@
 /**
  * @file state.h
- * @brief 軌道制御の状態変数
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief State variables for trajectory control.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
 #include "pose.h"
 
 /**
- * @brief 制御関係の名前空間
+ * @brief Control-related namespace.
  */
 namespace ctrl {
 
 /**
- * @brief 軌道制御の状態変数
+ * @brief State variables for trajectory control.
  */
 struct State {
-  Pose q;     //**< @brief 位置
-  Pose dq;    //**< @brief 速度
-  Pose ddq;   //**< @brief 加速度
-  Pose dddq;  //**< @brief 躍度
+  Pose q;     //**< @brief Position.
+  Pose dq;    //**< @brief Velocity.
+  Pose ddq;   //**< @brief Acceleration.
+  Pose dddq;  //**< @brief Jerk.
 };
 
 };  // namespace ctrl

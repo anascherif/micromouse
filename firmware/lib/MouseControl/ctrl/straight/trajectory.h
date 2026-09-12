@@ -1,9 +1,9 @@
 /**
  * @file trajectory.h
- * @brief 直線軌道を生成する
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Straight-line trajectory generator.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
@@ -11,32 +11,32 @@
 #include <ctrl/state.h>
 
 /**
- * @brief 制御関係の名前空間
+ * @brief Control-related namespace.
  */
 namespace ctrl {
 
 /**
- * @brief 直線関係の名前空間
+ * @brief Straight-line related namespace.
  */
 namespace straight {
 
 /**
- * @brief straight::Trajectory 直線の軌道生成器
+ * @brief straight::Trajectory straight-line trajectory generator.
  *
- * ctrl::TrajectoryTracker のために用意されたクラス
+ * Provided for use with ctrl::TrajectoryTracker.
  */
 class Trajectory : public AccelDesigner {
  public:
   /**
-   * @brief 空のコンストラクタ。
-   * 基底クラスの AccelDesigner::reset() により初期化すること。
+   * @brief Empty constructor.
+   * Must be initialized via the base class AccelDesigner::reset().
    */
   Trajectory() {}
   /**
-   * @brief 状態の更新
+   * @brief Update the state.
    *
-   * @param[out] s 状態変数
-   * @param[in] t 現在時刻
+   * @param[out] s State variables.
+   * @param[in] t Current time.
    */
   void update(struct State& s, const float t) const {
     s.q = Pose(x(t), 0, 0);

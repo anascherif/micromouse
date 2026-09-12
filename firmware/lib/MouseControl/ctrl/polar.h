@@ -1,9 +1,9 @@
 /**
  * @file polar.h
- * @brief 並進と回転の座標を管理するクラスをもつファイル
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Translation and rotation coordinates.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
@@ -12,7 +12,7 @@
 namespace ctrl {
 
 /**
- * @brief 並進と回転の座標
+ * @brief Translation and rotation coordinates.
  */
 struct Polar {
   float tra;  //< translation [m]

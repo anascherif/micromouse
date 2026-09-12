@@ -1,9 +1,9 @@
 /**
  * @file pose.h
- * @brief 平面上の位置姿勢の座標もつファイル。
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Pose coordinates on a plane.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
@@ -13,12 +13,12 @@
 namespace ctrl {
 
 /**
- * @brief 位置姿勢の座標
+ * @brief Position and orientation.
  */
 struct Pose {
-  float x;  /**< @brief x 成分 [m] */
-  float y;  /**< @brief y 成分 [m] */
-  float th; /**< @brief theta 成分 [rad] */
+  float x;  /**< @brief x component [m] */
+  float y;  /**< @brief y component [m] */
+  float th; /**< @brief theta component [rad] */
 
  public:
   constexpr Pose(const float x = 0, const float y = 0, const float th = 0)
