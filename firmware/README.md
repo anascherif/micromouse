@@ -1,6 +1,10 @@
 # MicroMouse Firmware — NRW 8.0 (Tunisia IEEE INSAT)
 
-PlatformIO project for ESP32 DevKit V1 + custom hardware:
+PlatformIO project for ESP32 DevKit V1 + custom hardware.
+
+Full BOM, wiring, and measured parameters: see
+[`HARDWARE_SPECS.md`](../HARDWARE_SPECS.md). Simulator and project
+overview: see [`README.md`](../README.md).
 
 - 2× N20 12V 1000RPM with quadrature encoders (TB6612FNG driver)
 - 3× HC-SR04 ultrasonic sensors (left, front, right)
@@ -82,10 +86,11 @@ If slalom is unstable, flip to `0` and recompile.
 
 ## Libraries (bundled in lib/)
 
-- **MazeLib** — `https://github.com/kerikun11/micromouse-maze-library` (MIT)
-- **MouseControl** — `https://github.com/kerikun11/micromouse-control-module` (MIT)
+- **MazeLib** — based on `https://github.com/kerikun11/micromouse-maze-library` (MIT)
+- **MouseControl** — based on `https://github.com/kerikun11/micromouse-control-module` (MIT)
 
-Both are C++17, PlatformIO-native.
+Both are C++17, PlatformIO-native. License credit is kept inline in the
+library sources.
 
 ## Troubleshooting
 
