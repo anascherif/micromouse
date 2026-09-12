@@ -1,9 +1,9 @@
 /**
  * @file Maze.cpp
- * @brief マイクロマウスの迷路クラスを定義
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2017-10-30
- * @copyright Copyright 2017 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Implementation of the Maze class.
+ *
+ * Portions derived from micromouse-maze-library (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #include "MazeLib/Maze.h"
 
@@ -129,21 +129,21 @@ int8_t Maze::unknownCount(const Position p) const {
 }
 bool Maze::updateWall(const Position p, const Direction d, const bool b,
                       const bool pushRecords) {
-  /* 既知の壁と食い違いがあったら未知壁としてreturn */
+  /* If the reading contradicts a known wall, mark it unknown */
   if (isKnown(p, d) && isWall(p, d) != b) {
     setWall(p, d, false);
     setKnown(p, d, false);
-    /* ログに追加 */
+    /* append to log */
     if (pushRecords) wallRecords.push_back(WallRecord(p, d, b));
     return false;
   }
-  /* 未知壁なら壁情報を更新 */
+  /* Update the wall if it was unknown */
   if (!isKnown(p, d)) {
     setWall(p, d, b);
     setKnown(p, d, true);
-    /* ログに追加 */
+    /* append to log */
     if (pushRecords) wallRecords.push_back(WallRecord(p, d, b));
-    /* 最大最小区画を更新 */
+    /* update the explored bounds */
     min_x = std::min(p.x, min_x);
     min_y = std::min(p.y, min_y);
     max_x = std::max(p.x, max_x);
@@ -152,11 +152,11 @@ bool Maze::updateWall(const Position p, const Direction d, const bool b,
   return true;
 }
 void Maze::resetLastWalls(const int num, const bool set_start_wall) {
-  /* 直近の壁情報を削除 */
+  /* remove the most recent wall records */
   for (int i = 0; i < num && !wallRecords.empty(); ++i) wallRecords.pop_back();
-  /* 削除後の壁情報を取得 */
+  /* capture the reduced record list */
   const auto new_wallRecords = wallRecords;
-  /* スタート壁を考慮して迷路を再構築 */
+  /* rebuild the maze, honoring the start walls */
   reset(set_start_wall);
   for (const auto wr : new_wallRecords)
     updateWall(wr.getPosition(), wr.getDirection(), wr.b);
@@ -388,11 +388,11 @@ void Maze::print(const Positions& positions, std::ostream& os,
 }
 bool Maze::backupWallRecordsToFile(const std::string& filepath,
                                    const bool clear) {
-  /* 変更なし */
+  /* nothing changed to back up */
   if (!clear &&
       wallRecordsBackupCounter == static_cast<int>(wallRecords.size()))
     return true;
-  /* 前のデータが残っていたら削除 */
+  /* drop leftover data from a previous backup */
   std::ifstream ifs(filepath, std::ios::ate);
   const int num_items = ifs.tellg() / sizeof(WallRecord);
   ifs.close();
@@ -400,7 +400,7 @@ bool Maze::backupWallRecordsToFile(const std::string& filepath,
     std::remove(filepath.c_str());
     wallRecordsBackupCounter = 0;
   }
-  /* WallRecords を追記 */
+  /* append WallRecords */
   std::ofstream ofs(filepath, std::ios::binary | std::ios::app);
   if (ofs.fail()) {
     MAZE_LOGW << "failed to open file! " << filepath << std::endl;
