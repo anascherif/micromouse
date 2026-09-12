@@ -1,9 +1,9 @@
 /**
  * @file StepMap.cpp
- * @brief マイクロマウスの迷路のステップマップを扱うクラス
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2017-11-05
- * @copyright Copyright 2017 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Implementation of the StepMap class.
+ *
+ * Portions derived from micromouse-maze-library (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #include "MazeLib/StepMap.h"
 
@@ -136,21 +136,21 @@ void StepMap::printFull(const Maze& maze, const Directions& dirs,
 void StepMap::update(const Maze& maze, const Positions& dest,
                      const bool knownOnly, const bool simple) {
   MAZE_DEBUG_PROFILING_START(0)
-  /* 計算を高速化するため、迷路の大きさを制限 */
+  /* limit the search bounds for speed */
   int8_t min_x = maze.getMinX();
   int8_t max_x = maze.getMaxX();
   int8_t min_y = maze.getMinY();
   int8_t max_y = maze.getMaxY();
-  for (const auto p : dest) {  //< ゴールを含めないと導出不可能になる
+  for (const auto p : dest) {  //< goals must be included
     min_x = std::min(p.x, min_x);
     max_x = std::max(p.x, max_x);
     min_y = std::min(p.y, min_y);
     max_y = std::max(p.y, max_y);
   }
-  min_x -= 1, min_y -= 1, max_x += 2, max_y += 2;  //< 外周を許す
-  /* 全区画のステップを最大値に設定 */
+  min_x -= 1, min_y -= 1, max_x += 2, max_y += 2;  //< allow rim cells
+  /* set every cell to the maximum step */
   reset();
-  /* ステップの更新予約のキュー */
+  /* priority queue for step updates */
 #define STEP_MAP_USE_PRIORITY_QUEUE 1
 #if STEP_MAP_USE_PRIORITY_QUEUE
   struct Element {
@@ -162,7 +162,7 @@ void StepMap::update(const Maze& maze, const Positions& dest,
 #else
   std::queue<Position> q;
 #endif
-  /* destのステップを0とする */
+  /* dest cells get step 0 */
   for (const auto p : dest)
     if (p.isInsideOfField())
 #if STEP_MAP_USE_PRIORITY_QUEUE
@@ -170,12 +170,12 @@ void StepMap::update(const Maze& maze, const Positions& dest,
 #else
       setStep(p, 0), q.push(p);
 #endif
-  /* ステップの更新がなくなるまで更新処理 */
+  /* relax until no step improves */
   while (!q.empty()) {
 #if MAZE_DEBUG_PROFILING
     queueSizeMax = std::max(queueSizeMax, static_cast<int>(q.size()));
 #endif
-    /* 注目する区画を取得 */
+    /* pop the focus cell */
 #if STEP_MAP_USE_PRIORITY_QUEUE
     const auto focus = q.top().p;
     const auto focus_step_q = q.top().s;
@@ -183,31 +183,31 @@ void StepMap::update(const Maze& maze, const Positions& dest,
     const auto focus = q.front();
 #endif
     q.pop();
-    /* 計算を高速化するため展開範囲を制限 */
+    /* skip cells outside the limited range */
     if (focus.x > max_x || focus.y > max_y || focus.x < min_x ||
         focus.y < min_y)
       continue;
     const auto focus_step = stepMap[focus.getIndex()];
 #if STEP_MAP_USE_PRIORITY_QUEUE
-    /* 枝刈り */
+    /* stale queue entry */
     if (focus_step < focus_step_q) continue;
 #endif
-    /* 周辺を走査 */
+    /* scan the four directions */
     for (const auto d : Direction::Along4()) {
-      /* 直線で行けるところまで更新する */
+      /* update as far straight as possible */
       auto next = focus;
       for (int8_t i = 1;; ++i) {
-        /* 壁あり or 既知壁のみで未知壁 ならば次へ */
+        /* stop at a wall or (when knownOnly) an unknown wall */
         const auto next_wi = WallIndex(next, d);
         if (maze.isWall(next_wi) || (knownOnly && !maze.isKnown(next_wi)))
           break;
-        next = next.next(d);  //< 移動
-        /* 直線加速を考慮したステップを算出 */
+        next = next.next(d);  //< advance
+        /* step value including straight-line acceleration */
         const step_t next_step = focus_step + (simple ? i : stepTable[i]);
         const auto next_index = next.getIndex();
-        if (stepMap[next_index] <= next_step) break;  //< 更新の必要がない
-        stepMap[next_index] = next_step;              //< 更新
-        /* 再帰的に更新するためにキューにプッシュ */
+        if (stepMap[next_index] <= next_step) break;  //< no improvement
+        stepMap[next_index] = next_step;              //< update
+        /* enqueue for further propagation */
 #if STEP_MAP_USE_PRIORITY_QUEUE
         q.push({next, next_step});
 #else
@@ -223,12 +223,12 @@ Directions StepMap::calcShortestDirections(const Maze& maze,
                                            const Positions& dest,
                                            const bool knownOnly,
                                            const bool simple) {
-  /* ステップマップを更新 */
+  /* update the step map */
   update(maze, dest, knownOnly, simple);
   Pose end;
   const auto shortestDirections = getStepDownDirections(
       maze, {start, Direction::Max}, end, knownOnly, simple, false);
-  /* ゴール判定 */
+  /* goal check */
   return stepMap[end.p.getIndex()] == 0 ? shortestDirections : Directions{};
 }
 Pose StepMap::calcNextDirections(const Maze& maze, const Pose& start,
@@ -245,32 +245,32 @@ Directions StepMap::getStepDownDirections(const Maze& maze, const Pose& start,
                                           const bool simple,
                                           const bool breakUnknown) const {
 #if 1
-  /* 最短経路となるスタートからの方向列 */
+  /* shortest direction sequence from the start */
   Directions shortestDirections;
   auto& focus = end;
-  /* start から順にステップマップを下る */
+  /* follow the step gradient from start */
   focus = start;
-  /* 確認 */
+  /* check */
   if (!start.p.isInsideOfField()) return {};
-  /* 周辺の走査; 未知壁の有無と最小ステップの方向を求める */
+  /* scan around; find unknown walls and the minimum-step direction */
   while (1) {
     const auto focus_step = stepMap[focus.p.getIndex()];
-    /* 終了条件 */
+    /* termination condition */
     if (focus_step == 0) break;
-    /* 周辺を走査 */
+    /* scan around */
     auto min_p = focus.p;
     auto min_d = Direction::Max;
     for (const auto d : Direction::Along4()) {
-      /* 直線で行けるところまで探す */
-      auto next = focus.p;  //< 隣接
+      /* look as far straight as possible */
+      auto next = focus.p;  //< adjacent
       for (int8_t i = 1;; ++i) {
-        /* 壁あり or 既知壁のみで未知壁 ならば次へ */
+        /* stop at a wall or (when knownOnly) an unknown wall */
         if (maze.isWall(next, d) || (knownOnly && !maze.isKnown(next, d)))
           break;
-        next = next.next(d);  //< 移動
-        /* 直線加速を考慮したステップを算出 */
+        next = next.next(d);  //< advance
+        /* step value including straight-line acceleration */
         const step_t next_step = focus_step - (simple ? i : stepTable[i]);
-        /* エッジコストと一致するか確認 */
+        /* match against the edge cost */
         if (stepMap[next.getIndex()] == next_step) {
           min_p = next, min_d = d;
           goto loop_exit;
@@ -278,11 +278,11 @@ Directions StepMap::getStepDownDirections(const Maze& maze, const Pose& start,
       }
     }
   loop_exit:
-    /* 現在地よりステップが大きかったらなんかおかしい */
+    /* sanity: the new cell must hold a smaller step */
     if (focus_step <= stepMap[min_p.getIndex()]) break;
-    /* 移動分を結果に追加 */
+    /* append the move to the result */
     while (focus.p != min_p) {
-      /* breakUnknown のとき、未知壁を含むならば既知区間は終了 */
+      /* breakUnknown: stop when a cell with unknown walls is reached */
       if (breakUnknown && maze.unknownCount(focus.p)) return shortestDirections;
       focus = focus.next(min_d);
       shortestDirections.push_back(min_d);
@@ -290,35 +290,35 @@ Directions StepMap::getStepDownDirections(const Maze& maze, const Pose& start,
   }
   return shortestDirections;
 #else
-  /* ステップマップから既知区間進行方向列を生成 */
+  /* build the known-section direction sequence from the step map */
   Directions shortestDirections;
-  /* start から順にステップマップを下る */
+  /* follow the step gradient from start */
   end = start;
-  /* 確認 */
+  /* check */
   if (!start.p.isInsideOfField()) return {};
   while (1) {
-    /* 周辺の走査; 未知壁の有無と、最小ステップの方向を求める */
+    /* scan around; find unknown walls and the minimum-step direction */
     auto min_pose = end;
     auto min_step = STEP_MAX;
     for (const auto d : Direction::Along4()) {
-      auto next = end.p;  //< 隣接
+      auto next = end.p;  //< adjacent
       for (int8_t i = 1; i < MAZE_SIZE; ++i) {
-        /* 壁あり or 既知壁のみで未知壁 ならば次へ */
+        /* stop at a wall or (when knownOnly) an unknown wall */
         if (maze.isWall(next, d) || (knownOnly && !maze.isKnown(next, d)))
           break;
-        next = next.next(d);  //< 隣接区画へ移動
-        /* 現時点の min_step よりステップが小さければ更新 */
+        next = next.next(d);  //< advance
+        /* update if the step is smaller than the current minimum */
         const auto next_step = stepMap[next.getIndex()];
         if (min_step <= next_step) break;
         min_step = next_step;
         min_pose = Pose{next, d};
       }
     }
-    /* 現在地よりステップが大きかったらなんかおかしい */
+    /* sanity: the new pose must hold a smaller step */
     if (stepMap[end.p.getIndex()] <= min_step) break;
-    /* 移動分を結果に追加 */
+    /* append the move to the result */
     while (end.p != min_pose.p) {
-      /* breakUnknown のとき、未知壁を含むならば既知区間は終了 */
+      /* breakUnknown: stop when a cell with unknown walls is reached */
       if (breakUnknown && maze.unknownCount(end.p)) return shortestDirections;
       end = end.next(min_pose.d);
       shortestDirections.push_back(min_pose.d);
@@ -329,20 +329,20 @@ Directions StepMap::getStepDownDirections(const Maze& maze, const Pose& start,
 }
 Directions StepMap::getNextDirectionCandidates(const Maze& maze,
                                                const Pose& focus) const {
-  /* 直線優先で進行方向の候補を抽出。全方位 STEP_MAX だと空になる */
+  /* pick candidates with straight priority; empty when all STEP_MAX */
   Directions dirs;
   dirs.reserve(4);
   for (const auto d : {focus.d + Direction::Front, focus.d + Direction::Left,
                        focus.d + Direction::Right, focus.d + Direction::Back})
     if (!maze.isWall(focus.p, d) && getStep(focus.p.next(d)) != STEP_MAX)
       dirs.push_back(d);
-  /* コストの低い順に並べ替え */
+  /* sort by increasing cost */
   std::sort(dirs.begin(), dirs.end(),
             [&](const Direction d1, const Direction d2) {
               return getStep(focus.p.next(d1)) < getStep(focus.p.next(d2));
             });
 #if 1
-  /* 未知壁優先で並べ替え(未知壁同士ならばコストが低い順) */
+  /* prioritize cells with unknown walls (ties by cost) */
   std::sort(dirs.begin(), dirs.end(),
             [&](const Direction d1, const Direction d2) {
               return (maze.unknownCount(focus.p.next(d1)) &&
@@ -350,7 +350,7 @@ Directions StepMap::getNextDirectionCandidates(const Maze& maze,
             });
 #endif
 #if 1
-  /* 直進優先に並べ替え */
+  /* prioritize straight travel */
   std::sort(dirs.begin(), dirs.end(),
             [&](const Direction d1, const Direction d2
                 __attribute__((unused))) { return d1 == focus.d; });
@@ -361,17 +361,17 @@ void StepMap::appendStraightDirections(const Maze& maze,
                                        Directions& shortestDirections,
                                        const bool knownOnly,
                                        const bool diagEnabled) {
-  /* ゴール区画までたどる */
+  /* walk up to the goal cells */
   auto p = maze.getStart();
   for (const auto d : shortestDirections) p = p.next(d);
   if (shortestDirections.size() < 2) return;
   auto prev_dir = shortestDirections[shortestDirections.size() - 1 - 1];
   auto dir = shortestDirections[shortestDirections.size() - 1];
-  /* ゴール区画内を行けるところまで直進(斜め考慮)する */
+  /* go straight inside the goal cells as far as possible (with diagonals) */
   bool loop = true;
   while (loop) {
     loop = false;
-    /* 斜めを考慮した進行方向を列挙する */
+    /* enumerate candidates with diagonals in mind */
     Directions dirs;
     const auto rel_dir = Direction(dir - prev_dir);
     if (diagEnabled && rel_dir == Direction::Left)
@@ -380,7 +380,7 @@ void StepMap::appendStraightDirections(const Maze& maze,
       dirs = {Direction(dir + Direction::Left), dir};
     else
       dirs = {dir};
-    /* 候補のうち行ける方向に行く */
+    /* take the first open candidate */
     for (const auto d : dirs) {
       if (!maze.isWall(p, d) && (!knownOnly || maze.isKnown(p, d))) {
         shortestDirections.push_back(d);
@@ -394,38 +394,38 @@ void StepMap::appendStraightDirections(const Maze& maze,
   }
 }
 /**
- * @brief 台形加速を考慮したコストを生成する関数
+ * @brief Cost of straight movement including trapezoidal acceleration.
  *
- * @param i マスの数
- * @param am 最大加速度
- * @param vs 始点速度
- * @param vm 飽和速度
- * @param seg 1マスの長さ
- * @return StepMap::step_t コスト
+ * @param i Number of cells.
+ * @param am Maximum acceleration.
+ * @param vs Start velocity.
+ * @param vm Saturation velocity.
+ * @param seg Length of one cell.
+ * @return StepMap::step_t Cost.
  */
 static StepMap::step_t calcStraightCost(const int i, const float am,
                                         const float vs, const float vm,
                                         const float seg) {
-  const auto d = seg * i;  //< i 区画分の走行距離
-  /* グラフの面積から時間を求める */
-  const auto d_thr = (vm * vm - vs * vs) / am;  //< 最大速度に達する距離
+  const auto d = seg * i;  //< distance of i cells
+  /* solve for time using the graph area */
+  const auto d_thr = (vm * vm - vs * vs) / am;  //< distance to reach vmax
   if (d < d_thr)
-    return 2 * (std::sqrt(vs * vs + am * d) - vs) / am * 1000;  //< 三角加速
+    return 2 * (std::sqrt(vs * vs + am * d) - vs) / am * 1000;  //< triangular
   else
-    return (am * d + (vm - vs) * (vm - vs)) / (am * vm) * 1000;  //< 台形加速
+    return (am * d + (vm - vs) * (vm - vs)) / (am * vm) * 1000;  //< trapezoid
 }
 void StepMap::calcStraightCostTable() {
-  const float vs = 420.0f;      //< 基本速度 [mm/s]
-  const float am_a = 4200.0f;   //< 最大加速度 [mm/s/s]
-  const float vm_a = 1500.0f;   //< 飽和速度 [mm/s]
-  const float seg_a = 90.0f;    //< 区画の長さ [mm]
-  const float t_turn = 287.0f;  //< 小回り90度ターンの時間 [ms]
-  stepTable[0] = 0;             //< [0] は使用しない
+  const float vs = 420.0f;      //< base velocity [mm/s]
+  const float am_a = 4200.0f;   //< maximum acceleration [mm/s^2]
+  const float vm_a = 1500.0f;   //< saturation velocity [mm/s]
+  const float seg_a = 90.0f;    //< cell length [mm]
+  const float t_turn = 287.0f;  //< tight 90-degree turn time [ms]
+  stepTable[0] = 0;             //< [0] unused
   for (int i = 1; i < stepTableSize; ++i) {
-    /* 1歩目は90度ターンとみなす */
+    /* the first step counts as a 90-degree turn */
     stepTable[i] = t_turn + calcStraightCost(i - 1, am_a, vs, vm_a, seg_a);
   }
-  /* コストの合計が 65,535 [ms] を超えないようにスケーリング */
+  /* keep the total cost below 65,535 [ms] by scaling */
   for (int i = 0; i < stepTableSize; ++i) {
     stepTable[i] /= scalingFactor;
 #if 0
