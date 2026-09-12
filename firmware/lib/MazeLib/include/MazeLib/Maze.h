@@ -1,9 +1,9 @@
 /**
  * @file Maze.h
- * @brief マイクロマウスの迷路を扱うクラスを定義
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2017-10-30
- * @copyright Copyright 2017 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Maze representation and wall management for a micromouse.
+ *
+ * Portions derived from micromouse-maze-library (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
@@ -16,7 +16,7 @@
 #include <string>
 #include <vector>
 
-/* debug profiling option */
+/* optional simple profiling aid */
 #define MAZE_DEBUG_PROFILING 0
 #if MAZE_DEBUG_PROFILING
 #warning "this is debug mode!"
@@ -45,7 +45,7 @@ static int microseconds() __attribute__((unused));
 #endif
 
 /*
- * 迷路のカラー表示切替
+ * Toggle colored console output for the maze printer.
  */
 #ifdef MAZE_COLOR_DISABLED
 #define C_RE ""
@@ -66,7 +66,7 @@ static int microseconds() __attribute__((unused));
 #endif
 
 /**
- * @brief ログ出力の選択
+ * @brief Logging verbosity selection.
  * @details 0: None, 1: Error, 2: Warn, 3: Info, 4: Debug
  */
 #ifndef MAZE_LOG_LEVEL
@@ -96,32 +96,32 @@ static int microseconds() __attribute__((unused));
 #endif
 
 /**
- * @brief 迷路探索ライブラリはすべてこの名前空間に格納されている。
+ * @brief All maze-searching library types live in this namespace.
  */
 namespace MazeLib {
 
 /**
- * @brief 迷路の1辺の区画数の定数。
+ * @brief Number of cells along one side of the maze.
  */
 static constexpr int MAZE_SIZE = 16;
 /**
- * @brief 迷路の1辺の区画数の bit 数。bit shift などに用いる。
+ * @brief Bits required to encode MAZE_SIZE. Used for bit shifts.
  */
 static constexpr int MAZE_SIZE_BIT = std::ceil(std::log2(MAZE_SIZE));
 /**
- * @brief 迷路の1辺の区画数の最大値。2のbit数乗の値。
+ * @brief Largest side length representable with MAZE_SIZE_BIT bits.
  */
 static constexpr int MAZE_SIZE_MAX = std::pow(2, MAZE_SIZE_BIT);
 
 /**
- * @brief 迷路上の方向を表す。
- * @details 実体は 8bit の整数。
- * 絶対方向 or 相対方向の8方位を表現することができる。
- * コンストラクタにより8方位(0-7)に自動的に収められるので、
- * 加法、減法により相対方向を計算することができる。
- * - 例: Direction(Direction::East + Direction::Left) == Direction::North
- * - 例: Direction(Direction::East - Direction::West) == Direction::Back
- * - 例: Direction(-Direction::Left) == Direction::Right
+ * @brief A direction on the maze.
+ * @details Backed by an 8-bit integer. Represents all 8 compass
+ * directions, either absolute or relative. The constructor normalizes
+ * the value into 0-7 so relative offsets can be computed by simple
+ * addition and subtraction.
+ * - e.g. Direction(Direction::East + Direction::Left) == Direction::North
+ * - e.g. Direction(Direction::East - Direction::West) == Direction::Back
+ * - e.g. Direction(-Direction::Left) == Direction::Right
  *
  * ```
  * AbsoluteDirection
@@ -145,7 +145,7 @@ static constexpr int MAZE_SIZE_MAX = std::pow(2, MAZE_SIZE_BIT);
 class Direction {
  public:
   /**
-   * @brief 絶対方向の列挙型。 0-7 の整数
+   * @brief Absolute compass directions, 0-7.
    */
   enum AbsoluteDirection : int8_t {
     East,
@@ -158,7 +158,7 @@ class Direction {
     SouthEast,
   };
   /**
-   * @brief 相対方向の列挙型。 0-7 の整数
+   * @brief Directions relative to the current heading, 0-7.
    */
   enum RelativeDirection : int8_t {
     Front,
@@ -171,47 +171,46 @@ class Direction {
     Right45,
   };
   /**
-   * @brief 方向の総数。for文などで使える。
-   * @details Direction 型ではなく int8_t 型なことに注意。
-   * (Direction 型は 0-7 の整数)
+   * @brief Total number of directions. Note this is an int8_t,
+   * not a Direction.
    */
   static constexpr const int8_t Max = 8;
 
  public:
   /**
-   * @brief デフォルトコンストラクタ。絶対方向をそのまま格納。
+   * @brief Default constructor, stores the given absolute direction.
    */
   constexpr Direction(const AbsoluteDirection d = East) : d(d) {}
   /**
-   * @brief 整数を引数としたコンストラクタ。
-   * @details 相対方向などの計算結果を 0-7 の整数に直して格納する。
-   * @param d 相対方向などの演算結果の整数
+   * @brief Constructor from an integer. Result of relative-direction
+   * arithmetic is normalized into 0-7.
+   * @param d Result of relative-direction arithmetic.
    */
   constexpr Direction(const int8_t d) : d(d & 7) {}
   /**
-   * @brief 整数へのキャスト。相対方向などの演算に使える。
+   * @brief Conversion to int for relative-direction arithmetic.
    */
   constexpr operator int8_t() const { return d; }
   /**
-   * @brief 壁沿い方向かどうかの判定
+   * @brief True if the direction is along an axis (not diagonal).
    */
   bool isAlong() const { return !(d & 1); }
   /**
-   * @brief 斜め方向かどうかの判定
+   * @brief True if the direction is diagonal.
    */
   bool isDiag() const { return (d & 1); }
   /**
-   * @brief 表示用char型へのキャスト
+   * @brief Printable char representation.
    */
   char toChar() const { return ">'^`<,v.X"[d]; }
   /**
-   * @brief stream 表示
+   * @brief Stream output.
    */
   friend std::ostream& operator<<(std::ostream& os, const Direction d) {
     return os << d.toChar();
   }
   /**
-   * @brief 斜めではない4方向の配列 (for文などで使用)
+   * @brief The four non-diagonal directions (useful for loops).
    */
   static constexpr const std::array<Direction, 4> Along4() {
     return {
@@ -222,7 +221,7 @@ class Direction {
     };
   }
   /**
-   * @brief 斜めの4方向の配列 (for文などで使用)
+   * @brief The four diagonal directions (useful for loops).
    */
   static constexpr const std::array<Direction, 4> Diag4() {
     return {
@@ -235,27 +234,26 @@ class Direction {
 
  private:
   /**
-   * @brief 方向情報の実体。
-   * @details コンストラクタによって確実に 0-7 の整数に収まる
+   * @brief Direction value, always normalized into 0-7.
    */
   int8_t d;
 };
 static_assert(sizeof(Direction) == 1, "size error");
 
 /**
- *  @brief Direction 構造体の動的配列、集合
+ * @brief Dynamic array / set of Direction.
  */
 using Directions = std::vector<Direction>;
 /**
- * @brief Directions の stream 表示
- * @details >^<v の形式
+ * @brief Stream output for Directions, rendered as a sequence of
+ * directional chars.
  */
 std::ostream& operator<<(std::ostream& os, const Directions& obj);
 
 /**
- * @brief 迷路の区画の位置(座標)を定義。
- * @details 実体は 16bit の整数。
- * 左下の区画が (0,0) の (x,y) 平面。
+ * @brief A cell position in the maze.
+ * @details Backed by a 16-bit integer. The bottom-left cell is (0,0)
+ * on an (x, y) plane.
  *
  * ```
  * +--------+--------+
@@ -267,99 +265,99 @@ std::ostream& operator<<(std::ostream& os, const Directions& obj);
  */
 struct Position {
  public:
-  /** @brief フィールドの区画数。配列確保などで使える。 */
+  /** @brief Total number of cells in the field; useful for allocation. */
   static constexpr int SIZE = MAZE_SIZE_MAX * MAZE_SIZE_MAX;
 
  public:
   union {
     struct {
-      int8_t x; /**< @brief 迷路区画のx座標成分 */
-      int8_t y; /**< @brief 迷路区画のy座標成分 */
+      int8_t x; /**< @brief X component of the cell. */
+      int8_t y; /**< @brief Y component of the cell. */
     };
-    uint16_t data; /**< @brief データ全体へのアクセス用 */
+    uint16_t data; /**< @brief Raw access to the whole value. */
   };
 
  public:
   /**
-   * @brief ゼロ初期化のデフォルトコンストラクタ
+   * @brief Zero-initializing default constructor.
    */
   constexpr Position() : data(0) {}
   /**
-   * @brief コンストラクタ
-   * @param x,y 初期化パラメータ
+   * @brief Constructor.
+   * @param x,y Initial coordinates.
    */
   constexpr Position(const int8_t x, const int8_t y) : x(x), y(y) {}
   /**
-   * @brief 迷路内の区画の一意な通し番号となるIDを取得する
-   * @details 迷路外の区画の場合未定義動作となる。
-   * Position::isInsideOfField() を使って迷路区画内であることを確認すること。
-   * @return uint16_t 通し番号ID
+   * @brief Unique sequential ID of a cell inside the maze.
+   * @details Behavior is undefined for out-of-field cells. Check
+   * Position::isInsideOfField() first.
+   * @return uint16_t sequential ID
    */
   uint16_t getIndex() const { return (x << MAZE_SIZE_BIT) | y; }
   /**
-   * @brief IDからPositionを作成する関数
-   * @param index 通し番号 ID
+   * @brief Reconstruct a Position from a sequential ID.
+   * @param index Sequential ID.
    */
   static Position getPositionFromIndex(const uint16_t index) {
     return {int8_t(index >> MAZE_SIZE_BIT),
             int8_t(index & (MAZE_SIZE_MAX - 1))};
   }
-  /** @brief 加法 */
+  /** @brief Addition. */
   Position operator+(const Position p) const {
     return Position(x + p.x, y + p.y);
   }
-  /** @brief 減法 */
+  /** @brief Subtraction. */
   Position operator-(const Position p) const {
     return Position(x - p.x, y - p.y);
   }
-  /** @brief 等号 */
+  /** @brief Equality. */
   bool operator==(const Position p) const {
     // return x == p.x && y == p.y;
-    return data == p.data;  //< 高速化
+    return data == p.data;  //< faster
   }
-  /** @brief 等号否定 */
+  /** @brief Inequality. */
   bool operator!=(const Position p) const {
     // return x != p.x || y != p.y;
-    return data != p.data;  //< 高速化
+    return data != p.data;  //< faster
   }
   /**
-   * @brief 自分の引数方向に隣接した区画の Position を返す
-   * @param d 隣接方向
-   * @return 隣接区画の座標
+   * @brief Position of the cell adjacent in the given direction.
+   * @param d Adjacent direction.
+   * @return Position of the adjacent cell.
    */
   Position next(const Direction d) const;
   /**
-   * @brief フィールド内かどうかを判定する関数
-   * @return true フィールド内
-   * @return false フィールド外
+   * @brief True if the position is inside the field.
+   * @return true Inside the field
+   * @return false Outside the field
    */
   bool isInsideOfField() const {
     // return x >= 0 && x < MAZE_SIZE && y >= 0 && y < MAZE_SIZE;
-    /* 高速化 */
+    /* faster */
     return (static_cast<uint8_t>(x) < MAZE_SIZE) &&
            (static_cast<uint8_t>(y) < MAZE_SIZE);
   }
   /**
-   * @brief 座標を回転変換する
-   * @param d 回転角度, 4方位のみ
-   * @return 変換後の位置
+   * @brief Rotate the coordinate about the origin.
+   * @param d Rotation amount; only 4 directions are supported.
+   * @return Rotated position.
    */
   Position rotate(const Direction d) const;
   /**
-   * @brief 座標を回転変換する
-   * @param d 回転角度, 4方位のみ
-   * @param center 回転中心座標
-   * @return 変換後の位置
+   * @brief Rotate the coordinate about an arbitrary center.
+   * @param d Rotation amount; only 4 directions are supported.
+   * @param center Center of rotation.
+   * @return Rotated position.
    */
   Position rotate(const Direction d, const Position center) const {
     return center + (*this - center).rotate(d);
   }
   /**
-   * @brief output-stream の表示関数。 (  x,  y) の形式
+   * @brief Stream output in (  x,  y) form.
    */
   friend std::ostream& operator<<(std::ostream& os, const Position p);
   /**
-   * @brief 表示用文字列に変換する
+   * @brief Printable string representation.
    */
   const char* toString() const {
     static char str[32];
@@ -370,18 +368,18 @@ struct Position {
 static_assert(sizeof(Position) == 2, "size error");
 
 /**
- * @brief Position 構造体の動的配列、集合
+ * @brief Dynamic array / set of Position.
  */
 using Positions = std::vector<Position>;
 
 /**
- * @brief Position と Direction をまとめた型。位置姿勢。
- * @details アライメント制約により実体は 4Bytes。
- * 位置姿勢は、区画とそこに向かう方向で特定する。
- * 現在区画から出る方向ではないことに注意する。
+ * @brief A Position with a Direction, describing a pose.
+ * @details Alignment constraints make this 4 bytes. A pose specifies a
+ * cell and the direction of travel into that cell (not the direction out
+ * of the current cell).
  *
  * ```
- * +---+---+---+ 例:
+ * +---+---+---+  example:
  * |   <       | <--- (0, 2, West)
  * +   +---+ ^ + <--- (2, 2, North)
  * |   >       | <--- (1, 1, East)
@@ -392,26 +390,26 @@ using Positions = std::vector<Position>;
  */
 struct Pose {
  public:
-  Position p;  /**< @brief 位置 */
-  Direction d; /**< @brief 姿勢 */
+  Position p;  /**< @brief Position. */
+  Direction d; /**< @brief Direction. */
 
  public:
   Pose() {}
   Pose(const Position p, const Direction d) : p(p), d(d) {}
   /**
-   * @brief 隣接姿勢の取得
-   * @param nextDirection 隣接方向
-   * @return Pose 隣接姿勢
+   * @brief Pose of the adjacent cell.
+   * @param nextDirection Adjacent direction.
+   * @return Pose Adjacent pose.
    */
   Pose next(const Direction nextDirection) const {
     return Pose(p.next(nextDirection), nextDirection);
   }
   /**
-   * @brief ostream での表示
+   * @brief Stream output.
    */
   friend std::ostream& operator<<(std::ostream& os, const Pose& pose);
   /**
-   * @brief 表示用文字列に変換する
+   * @brief Printable string representation.
    */
   const char* toString() const {
     static char str[32];
@@ -422,16 +420,12 @@ struct Pose {
 static_assert(sizeof(Pose) == 4, "size error");
 
 /**
- * @brief 区画ベースではなく、壁ベースの管理ID
- * @details uint16_t にキャストすることで全部の壁が通し番号になったIDを
- * 取得できるという特徴がある。
- * 迷路内部の壁の総数 WallIndex::SIZE 個の配列を確保しておけば、
- * 取得したIDをインデックスとして使える。そのとき、 WallIndex が
- * 迷路の内部にあるかどうか確認すること。(配列の範囲外アクセス防止)
- * isInsideOfField() 関数により迷路の内部に位置するか確認できる。
- * 最初から全部が通し番号のIDで保持してしまうと、
- * 迷路の範囲外の壁を表現できなくなってしまうため、
- * 必要に応じてIDを生成するようになっている。
+ * @brief Wall-based management ID (as opposed to cell-based).
+ * @details Casting to uint16_t yields a unique running index over all
+ * walls. A WallIndex::SIZE-sized array indexed by that ID covers every
+ * internal wall; check isInsideOfField() before indexing to avoid OOB.
+ * IDs are only valid for internal walls, since the outer boundary has no
+ * wall to represent.
  *
  * ```
  *      [x, y]    : Cell Position
@@ -454,105 +448,105 @@ static_assert(sizeof(Pose) == 4, "size error");
  */
 struct WallIndex {
   /**
-   * @brief 壁を unique な通し番号として表現したときの総数。
-   * 配列の確保などで使用できる。
+   * @brief Total number of unique wall IDs in a field; useful for
+   * allocation.
    */
   static constexpr int SIZE = MAZE_SIZE_MAX * MAZE_SIZE_MAX * 2;
 
  public:
   union {
     struct {
-      int8_t x;      /**< @brief 区画座標のx成分 */
-      int8_t y : 7;  /**< @brief 区画座標のy成分 */
-      uint8_t z : 1; /**< @brief 区画内の壁の位置。0:East, 1:North */
+      int8_t x;      /**< @brief X component of the cell. */
+      int8_t y : 7;  /**< @brief Y component of the cell. */
+      uint8_t z : 1; /**< @brief Wall position in cell. 0:East, 1:North */
     };
-    uint16_t data; /**< @brief データ全体へのアクセス用 */
+    uint16_t data; /**< @brief Raw access to the whole value. */
   };
   static_assert(MAZE_SIZE < std::pow(2, 6), "MAZE_SIZE is too large!");
 
  public:
   /**
-   * @brief デフォルトコンストラク
+   * @brief Default constructor.
    */
   constexpr WallIndex() : data(0) {}
   /**
-   * @brief 成分を受け取ってそのまま格納するコンストラクタ
+   * @brief Constructor storing the given raw components.
    */
   constexpr WallIndex(const int8_t x, const int8_t y, const uint8_t z)
       : x(x), y(y), z(z) {}
   /**
-   * @brief 表現の冗長性を除去して格納するコンストラクタ
-   * @param p 区画位置
-   * @param d 区画内方向。4方位
+   * @brief Constructor that removes representation redundancy.
+   * @param p Cell position.
+   * @param d Direction within the cell; 4 directions.
    */
   WallIndex(const Position p, const Direction d) : x(p.x), y(p.y) {
     uniquify(d);
   }
   /**
-   * @brief IDを使って初期化するコンストラクタ
-   * @param i 壁の通し番号ID。迷路内の壁であること。
-   * @attention 迷路外の壁の場合未定義動作となる。
+   * @brief Constructor from a wall ID.
+   * @param i Wall ID; must refer to an internal wall.
+   * @attention Undefined behavior for walls outside the field.
    */
   constexpr WallIndex(const uint16_t i)
       : x(i & (MAZE_SIZE_MAX - 1)),
         y((i >> MAZE_SIZE_BIT) & (MAZE_SIZE_MAX - 1)),
         z(i >> (2 * MAZE_SIZE_BIT)) {}
-  /** @brief 等号 */
+  /** @brief Equality. */
   bool operator==(const WallIndex i) const {
     // return x == i.x && y == i.y && z == i.z;
-    return data == i.data;  //< 高速化
+    return data == i.data;  //< faster
   }
-  /** @brief 等号否定 */
+  /** @brief Inequality. */
   bool operator!=(const WallIndex i) const {
     // return x != i.x || y != i.y || z != i.z;
-    return data != i.data;  //< 高速化
+    return data != i.data;  //< faster
   }
   /**
-   * @brief 迷路内の壁を一意な通し番号として表現したIDを返す。
-   * @attention 迷路外の壁の場合未定義動作となる。
-   * WallIndex::isInsideOfField() で迷路区画内か確認すること。
+   * @brief Unique running ID of this wall within the field.
+   * @attention Undefined behavior for walls outside the field.
+   * Check with WallIndex::isInsideOfField().
    * @return uint16_t ID
    */
   uint16_t getIndex() const {
     // return (z << (2 * MAZE_SIZE_BIT)) | (y << MAZE_SIZE_BIT) | x;
-    return (z << (MAZE_SIZE_BIT << 1)) | (y << MAZE_SIZE_BIT) | x;  //< 高速化
+    return (z << (MAZE_SIZE_BIT << 1)) | (y << MAZE_SIZE_BIT) | x;  //< faster
   }
-  /** @brief 位置の取得 */
+  /** @brief The cell position of this wall. */
   Position getPosition() const { return Position(x, y); }
-  /** @brief 方向の取得 */
+  /** @brief The direction of this wall. */
   Direction getDirection() const {
     // return z == 0 ? Direction::East : Direction::North;
-    return z << 1;  //< 高速化
+    return z << 1;  //< faster
   }
   /**
-   * @brief 表示用演算子のオーバーロード。 ( x, y, d) の形式
+   * @brief Stream output in ( x, y, d) form.
    */
   friend std::ostream& operator<<(std::ostream& os, const WallIndex i);
   /**
-   * @brief 壁がフィールド内か判定する関数
-   * @details (x, y) が (0, 0) と (MAZE_SIZE-1, MAZE_SIZE-1) の間、かつ、
-   * z が外周上でない
-   * @return true フィールド内
-   * @return false フィールド外(外周上を含む)
+   * @brief True if the wall lies inside the field.
+   * @details (x, y) between (0, 0) and (MAZE_SIZE-1, MAZE_SIZE-1), and
+   * z is not on the outer boundary.
+   * @return true Inside the field
+   * @return false Outside the field (including the boundary)
    */
   bool isInsideOfField() const {
-    /* x,y が フィールド内かつ、外周上にいない */
+    /* x and y inside the field and not on the boundary */
     // return !(x < 0 || y < 0 || x >= MAZE_SIZE || y >= MAZE_SIZE ||
     //          (z == 0 && (x == MAZE_SIZE - 1)) ||
     //          (z == 1 && (y == MAZE_SIZE - 1)));
-    /* 高速化 */
+    /* faster */
     return (static_cast<uint8_t>(x) < MAZE_SIZE - 1 + z) &&
            (static_cast<uint8_t>(y) < MAZE_SIZE - z);
   }
   /**
-   * @brief 引数方向の WallIndex を取得する関数
-   * @param d 隣接方向
-   * @return WallIndex 隣接壁
+   * @brief WallIndex of the wall adjacent in the given direction.
+   * @param d Adjacent direction.
+   * @return WallIndex Adjacent wall.
    */
   WallIndex next(const Direction d) const;
   /**
-   * @brief 現在壁に隣接する、柱ではない6方向を取得
-   * @return std::array<Direction, 6> 隣接方向の配列
+   * @brief The six non-pillar directions adjacent to the current wall.
+   * @return std::array<Direction, 6> Array of adjacent directions.
    */
   std::array<Direction, 6> getNextDirection6() const {
     const auto d = getDirection();
@@ -568,9 +562,9 @@ struct WallIndex {
 
  private:
   /**
-   * @brief 方向の冗長性を除去してユニークにする関数
-   * @details 基本的にコンストラクタで使われるので、ユーザーが使うことはない。
-   * @param d 壁の方向 (4方位)
+   * @brief Normalize the wall direction into a unique representation.
+   * @details Mostly used by the constructors; end users rarely need it.
+   * @param d Wall direction (4 directions).
    */
   void uniquify(const Direction d) {
     z = (d >> 1) & 1;  //< {East,West} => 0, {North,South} => 1
@@ -587,68 +581,68 @@ struct WallIndex {
 static_assert(sizeof(WallIndex) == 2, "size error");
 
 /**
- * @brief WallIndex の動的配列、集合
+ * @brief Dynamic array / set of WallIndex.
  */
 using WallIndexes = std::vector<WallIndex>;
 
 /**
- * @brief 区画位置、方向、壁の有無を保持する構造体。
+ * @brief Cell position, wall direction, and wall presence.
  * @details
- * - 実体は 16bit の整数
- * - 探索の記録などに用いる
- * - サイズを小さくするためにビットフィールド構造体を用いている
+ * - Backed by a 16-bit integer.
+ * - Used to record exploration history.
+ * - Uses a packed bit-field struct to stay small.
  */
 struct WallRecord {
   /**
-   * @brief データメンバの共用体
+   * @brief Anonymous union of data members.
    */
   union {
     struct {
-      int x : 6;          /**< @brief 区画のx座標 */
-      int y : 6;          /**< @brief 区画のy座標 */
-      unsigned int d : 3; /**< @brief 壁の方向 */
-      unsigned int b : 1; /**< @brief 壁の有無 */
+      int x : 6;          /**< @brief Cell X coordinate. */
+      int y : 6;          /**< @brief Cell Y coordinate. */
+      unsigned int d : 3; /**< @brief Wall direction. */
+      unsigned int b : 1; /**< @brief Wall presence. */
     } __attribute__((__packed__));
-    uint16_t data; /**< @brief データ全体へのアクセス用 */
+    uint16_t data; /**< @brief Raw access to the whole value. */
   };
   static_assert(MAZE_SIZE < std::pow(2, 6), "MAZE_SIZE is too large!");
   /**
-   * @brief コンストラクタ
+   * @brief Constructor.
    */
   WallRecord() {}
   WallRecord(const int8_t x, const int8_t y, const Direction d, const bool b)
       : x(x), y(y), d(d), b(b) {}
   WallRecord(const Position p, const Direction d, const bool b)
       : x(p.x), y(p.y), d(d), b(b) {}
-  /** @brief 区画の取得 */
+  /** @brief The cell position. */
   const Position getPosition() const { return Position(x, y); }
-  /** @brief 方向の取得 */
+  /** @brief The wall direction. */
   const Direction getDirection() const { return d; }
-  /** @brief 表示 */
+  /** @brief Stream output. */
   friend std::ostream& operator<<(std::ostream& os, const WallRecord& obj);
 };
 static_assert(sizeof(WallRecord) == 2, "size error");
 
 /**
- * @brief WallRecord 構造体の動的配列の定義
+ * @brief Dynamic array of WallRecord.
  */
 using WallRecords = std::vector<WallRecord>;
 
 /**
- * @brief 迷路の壁情報を管理するクラス
+ * @brief Keeps track of the maze wall map.
  * @details
- * - 壁情報とスタート位置とゴール位置の集合などを保持する
- * - 壁の有無の確認は、isWall()
- * - 壁の既知未知の確認は、isKnown()
- * - 壁の更新は、updateWall() によって行う
- * - 壁のバックアップ用に WallRecords 情報も管理する
+ * - Stores the wall map plus the start and goal cells.
+ * - Use isWall() to check wall presence.
+ * - Use isKnown() to check whether a wall is explored.
+ * - Use updateWall() to modify a wall.
+ * - Maintains a WallRecords log for wall backup.
  */
 class Maze {
  public:
   /**
-   * @brief デフォルトコンストラクタ
-   * @param goals ゴール区画の集合
-   * @param start スタート区画
+   * @brief Default constructor.
+   * @param goals Set of goal cells.
+   * @param start Start cell.
    */
   Maze(const Positions& goals = Positions(),
        const Position start = Position(0, 0))
@@ -656,15 +650,17 @@ class Maze {
     reset();
   }
   /**
-   * @brief 迷路の初期化。壁を削除し、スタート区画を既知に
-   * @param set_start_wall スタート区画の East と North の壁を設定するかどうか
-   * @param set_range_full 高速化用の min_x などを予め最大に設定するかどうか
+   * @brief Clear the maze; marks the start cell as explored.
+   * @param set_start_wall Whether to set the start cell's East and North
+   * walls.
+   * @param set_range_full Whether to pre-expand the explored range to
+   * the full field.
    */
   void reset(const bool set_start_wall = true,
              const bool set_range_full = false);
   /**
-   * @brief 壁の有無を返す
-   * @return true: 壁あり、false: 壁なし
+   * @brief Whether a wall exists at the given location.
+   * @return true Wall exists, false no wall
    */
   bool isWall(const WallIndex i) const { return isWallBase(wall, i); }
   bool isWall(const Position p, const Direction d) const {
@@ -674,9 +670,9 @@ class Maze {
     return isWallBase(wall, WallIndex(Position(x, y), d));
   }
   /**
-   * @brief 壁を更新をする
-   * @param i 壁の位置
-   * @param b 壁の有無 true:壁あり、false:壁なし
+   * @brief Update a wall.
+   * @param i Wall location.
+   * @param b Presence. true: wall, false: no wall.
    */
   void setWall(const WallIndex i, const bool b) {
     return setWallBase(wall, i, b);
@@ -689,8 +685,8 @@ class Maze {
     return setWallBase(wall, WallIndex(Position(x, y), d), b);
   }
   /**
-   * @brief 壁が探索済みかを返す
-   * @return true: 探索済み、false: 未探索
+   * @brief Whether the wall has been explored.
+   * @return true Explored, false not explored
    */
   bool isKnown(const WallIndex i) const { return isWallBase(known, i); }
   bool isKnown(const Position p, const Direction d) const {
@@ -700,9 +696,9 @@ class Maze {
     return isWallBase(known, WallIndex(Position(x, y), d));
   }
   /**
-   * @brief 壁の既知を更新する
-   * @param i 壁の位置
-   * @param b 壁の未知既知 true:既知、false:未知
+   * @brief Mark a wall explored / unexplored.
+   * @param i Wall location.
+   * @param b Explored state. true: known, false: unknown.
    */
   void setKnown(const WallIndex i, const bool b) {
     return setWallBase(known, i, b);
@@ -715,9 +711,9 @@ class Maze {
     return setWallBase(known, WallIndex(Position(x, y), d), b);
   }
   /**
-   * @brief 通過可能かどうかを返す
-   * @return true: 既知かつ壁なし
-   * @return false: それ以外
+   * @brief Whether the wall can be traversed.
+   * @return true Explored and wall-free
+   * @return false Otherwise
    */
   bool canGo(const WallIndex i) const { return !isWall(i) && isKnown(i); }
   bool canGo(const Position p, const Direction d) const {
@@ -727,61 +723,63 @@ class Maze {
     return !isWall(i) && (isKnown(i) || !knownOnly);
   }
   /**
-   * @brief 既知の壁情報と照らしあわせながら、壁を更新する関数
-   * @details 既知の壁と非一致した場合、未知壁にして return する
-   * @param p 区画の座標
-   * @param d 壁の方向
-   * @param b 壁の有無
-   * @param pushRecords 壁更新の記録に追加する
-   * @return true: 正常に更新された
-   * @return false: 既知の情報と不一致だった
+   * @brief Update a wall, checking consistency with known walls.
+   * @details If the reading contradicts a known wall, the wall is marked
+   * unknown and this returns false.
+   * @param p Cell position.
+   * @param d Wall direction.
+   * @param b Wall presence.
+   * @param pushRecords Whether to append to the update record.
+   * @return true Updated normally
+   * @return false Contradicts known wall info
    */
   bool updateWall(const Position p, const Direction d, const bool b,
                   const bool pushRecords = true);
   /**
-   * @brief 直前に更新した壁を見探索状態にリセットする
-   * @param num 消去する直近の壁の数
-   * @param set_start_wall スタート区画の East と North の壁を設定するかどうか
+   * @brief Forget the most recently updated walls.
+   * @param num Number of recent walls to clear.
+   * @param set_start_wall Whether to set the start cell's East and North
+   * walls.
    */
   void resetLastWalls(const int num, const bool set_start_wall = true);
   /**
-   * @brief 引数区画の壁の数を返す
-   * @param p 区画の座標
-   * @return 壁の数 0~4
+   * @brief Number of walls around the given cell.
+   * @param p Cell position.
+   * @return Number of walls, 0-4.
    */
   int8_t wallCount(const Position p) const;
   /**
-   * @brief 引数区画に隣接する未知壁の数を返す
-   * @param p 区画の座標
-   * @return 既知壁の数 0~4
+   * @brief Number of unknown walls adjacent to the given cell.
+   * @param p Cell position.
+   * @return Number of unknown walls, 0-4.
    */
   int8_t unknownCount(const Position p) const;
   /**
-   * @brief 迷路の表示
+   * @brief Print the maze.
    */
   void print(std::ostream& os = std::cout,
              const int mazeSize = MAZE_SIZE) const;
   /**
-   * @brief パス付きの迷路の表示
-   * @param start パスのスタート座標
-   * @param dirs 移動方向の配列
-   * @param os output-stream
-   * @param mazeSize 迷路の1辺の区画数（正方形のみ対応）
+   * @brief Print the maze with a path overlay.
+   * @param start Start coordinate of the path.
+   * @param dirs Array of travel directions.
+   * @param os Output stream.
+   * @param mazeSize Cells per side (square only).
    */
   void print(const Directions& dirs, const Position start = Position(0, 0),
              std::ostream& os = std::cout,
              const int mazeSize = MAZE_SIZE) const;
   /**
-   * @brief 位置のハイライト付きの迷路の表示
-   * @param positions ハイライトする位置の集合
-   * @param os output-stream
-   * @param mazeSize 迷路の1辺の区画数（正方形のみ対応）
+   * @brief Print the maze with a set of highlighted positions.
+   * @param positions Positions to highlight.
+   * @param os Output stream.
+   * @param mazeSize Cells per side (square only).
    */
   void print(const Positions& positions, std::ostream& os = std::cout,
              const int mazeSize = MAZE_SIZE) const;
   /**
-   * @brief 特定の迷路の文字列(*.maze ファイル)から壁をパースする
-   * @details テキスト形式。S: スタート区画(単数)、G: ゴール区画(複数可)
+   * @brief Parse a maze from a text (*.maze) stream.
+   * @details Text walls; S: start cell (single), G: goal cells (any).
 
    * ```
    * +---+---+
@@ -791,7 +789,7 @@ class Maze {
    * +---+---+
    * ```
    *
-   * @param is *.maze 形式のファイルの input-stream
+   * @param is Input stream in *.maze format.
    */
   bool parse(std::istream& is);
   bool parse(const std::string& filepath) {
@@ -799,85 +797,85 @@ class Maze {
     return ifs ? parse(ifs) : false;
   }
   /**
-   * @brief 入力ストリームの迷路データをパースする
-   * @details 使用例: Maze maze; maze << std::cin;
-   * @param is テキスト形式の迷路データを含む入力ストリーム
-   * @param maze パース結果を書き出す迷路の参照
-   * @return std::istream& 引数の is をそのまま返す
+   * @brief Parse maze data from an input stream.
+   * @details Usage: Maze maze; maze << std::cin;
+   * @param is Input stream containing text-format maze data.
+   * @param maze Maze reference to parse into.
+   * @return std::istream& The input argument, unchanged.
    */
   friend std::istream& operator>>(std::istream& is, Maze& maze) {
     maze.parse(is);
     return is;
   }
   /**
-   * @brief 配列から迷路を読み込むパーサ
-   * @param data 各区画16進表記の文字列配列
-   * 例：{"abaf", "1234", "abab", "aaff"}
-   * @param mazeSize 迷路の1辺の区画数（正方形のみ対応）
+   * @brief Parse a maze from an array of hex strings.
+   * @param data Array of per-cell hex strings, e.g. {"abaf", "1234",
+   * "abab", "aaff"}.
+   * @param mazeSize Cells per side (square only).
    */
   bool parse(const std::vector<std::string>& data, const int mazeSize);
   /**
-   * @brief ゴール区画の集合を更新
+   * @brief Set the goal cells.
    */
   void setGoals(const Positions& goals) { this->goals = goals; }
   /**
-   * @brief スタート区画を更新
+   * @brief Set the start cell.
    */
   void setStart(const Position start) { this->start = start; }
   /**
-   * @brief ゴール区画の集合を取得
+   * @brief Get the goal cells.
    */
   const Positions& getGoals() const { return goals; }
   /**
-   * @brief スタート区画を取得
+   * @brief Get the start cell.
    */
   const Position& getStart() const { return start; }
   /**
-   * @brief 壁ログを取得
+   * @brief Get the wall update log.
    */
   const WallRecords& getWallRecords() const { return wallRecords; }
   /**
-   * @brief 既知部分の迷路サイズを返す。計算量を減らすために使用。
+   * @brief Bounds of the explored region; used to cut computation.
    */
   int8_t getMinX() const { return min_x; }
   int8_t getMinY() const { return min_y; }
   int8_t getMaxX() const { return max_x; }
   int8_t getMaxY() const { return max_y; }
   /**
-   * @brief 壁ログをファイルに追記保存する関数
+   * @brief Append the wall record to a file.
    */
   bool backupWallRecordsToFile(const std::string& filepath,
                                const bool clear = false);
   /**
-   * @brief 壁ログファイルから壁情報を復元する関数
+   * @brief Restore the wall record from a file.
    */
   bool restoreWallRecordsFromFile(const std::string& filepath);
 
  protected:
-  std::bitset<WallIndex::SIZE> wall;  /**< @brief 壁情報 */
-  std::bitset<WallIndex::SIZE> known; /**< @brief 壁の既知未知情報 */
-  Positions goals;                    /**< @brief ゴール区画の集合 */
-  Position start;                     /**< @brief スタート区画 */
-  WallRecords wallRecords;            /**< @brief 更新した壁のログ */
-  int8_t min_x;                       /**< @brief 既知壁の最小区画 */
-  int8_t min_y;                       /**< @brief 既知壁の最小区画 */
-  int8_t max_x;                       /**< @brief 既知壁の最大区画 */
-  int8_t max_y;                       /**< @brief 既知壁の最大区画 */
-  int wallRecordsBackupCounter; /**< @brief 壁ログバックアップのカウンタ */
+  std::bitset<WallIndex::SIZE> wall;  /**< @brief Wall map. */
+  std::bitset<WallIndex::SIZE> known; /**< @brief Known/unknown walls. */
+  Positions goals;                    /**< @brief Goal cells. */
+  Position start;                     /**< @brief Start cell. */
+  WallRecords wallRecords;            /**< @brief Wall update log. */
+  int8_t min_x;                       /**< @brief Min explored X. */
+  int8_t min_y;                       /**< @brief Min explored Y. */
+  int8_t max_x;                       /**< @brief Max explored X. */
+  int8_t max_y;                       /**< @brief Max explored Y. */
+  int wallRecordsBackupCounter; /**< @brief Wall record backup counter. */
 
   /**
-   * @brief 壁の確認のベース関数。迷路外を参照すると壁ありと返す。
+   * @brief Base wall lookup; out-of-field walls read as present.
    */
   bool isWallBase(const std::bitset<WallIndex::SIZE>& wall,
                   const WallIndex i) const {
-    return !i.isInsideOfField() || wall[i.getIndex()];  //< 範囲外は壁ありに
+    return !i.isInsideOfField() || wall[i.getIndex()];  //< out of field = wall
   }
   /**
-   * @brief 壁の更新のベース関数。迷路外を参照すると無視される。
+   * @brief Base wall update; out-of-field writes are ignored.
    */
   void setWallBase(std::bitset<WallIndex::SIZE>& wall, const WallIndex i,
                    const bool b) const {
-    if (i.isInsideOfField())  //< 範囲外アクセスの防止
+    if (i.isInsideOfField())  //< prevent out-of-range access
       wall[i.getIndex()] = b;
   }
 };
