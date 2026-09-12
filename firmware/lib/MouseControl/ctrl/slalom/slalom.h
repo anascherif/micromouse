@@ -1,9 +1,9 @@
 /**
  * @file slalom.h
- * @brief 拘束条件からスラロームを軌道生成するライブラリ
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Slalom trajectory generation from constraints.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
@@ -16,57 +16,58 @@
 #include <ostream>
 
 /**
- * @brief 制御関係の名前空間
+ * @brief Control-related namespace.
  */
 namespace ctrl {
 
 /**
- * @brief スラローム関係の名前空間
+ * @brief Slalom-related namespace.
  */
 namespace slalom {
 
 /**
- * @brief 最大角躍度のデフォルト値 [rad/s/s/s]
+ * @brief Default maximum angular jerk [rad/s/s/s].
  */
 static constexpr float dddth_max_default = 1200 * M_PI;
 /**
- * @brief 最大角加速度のデフォルト値 [rad/s/s]
+ * @brief Default maximum angular acceleration [rad/s/s].
  */
 static constexpr float ddth_max_default = 36 * M_PI;
 /**
- * @brief 最大角速度のデフォルト値 [rad/s]
+ * @brief Default maximum angular velocity [rad/s].
  */
 static constexpr float dth_max_default = 3 * M_PI;
 
 /**
- * @brief slalom::Shape スラロームの形状を表す構造体
+ * @brief slalom::Shape describes a slalom shape.
  *
- * メンバー変数は互いに依存して決定されているので、
- * 個別に数値を変更することは許されない。
- * スラローム軌道を得るには slalom::Trajectory を用いる。
+ * The members are determined interdependently, so modifying individual
+ * values is not allowed. Use slalom::Trajectory to obtain a slalom
+ * trajectory.
  */
 struct Shape {
-  Pose total; /**< @brief 前後の直線を含めた移動位置姿勢 */
-  Pose curve; /**< @brief カーブ部分の移動位置姿勢 */
-  float straight_prev; /**< @brief カーブ前の直線の距離 [m] */
-  float straight_post; /**< @brief カーブ後の直線の距離 [m] */
-  float v_ref;         /**< @brief カーブ部分の基準速度 [m/s] */
-  float dddth_max;     /**< @brief 最大角躍度の大きさ [rad/s/s/s] */
-  float ddth_max;      /**< @brief 最大角加速度の大きさ [rad/s/s] */
-  float dth_max;       /**< @brief 最大角速度の大きさ [rad/s] */
+  Pose total; /**< @brief Displacement including the straight sections. */
+  Pose curve; /**< @brief Displacement of the curved section. */
+  float straight_prev; /**< @brief Straight distance before the curve [m]. */
+  float straight_post; /**< @brief Straight distance after the curve [m]. */
+  float v_ref;         /**< @brief Reference velocity on the curve [m/s]. */
+  float dddth_max;     /**< @brief Maximum angular jerk magnitude [rad/s/s/s]. */
+  float ddth_max;      /**< @brief Maximum angular acceleration [rad/s/s]. */
+  float dth_max;       /**< @brief Maximum angular velocity [rad/s]. */
 
  public:
   /**
-   * @brief 拘束条件からスラローム形状を生成するコンストラクタ
+   * @brief Constructor generating a slalom shape from constraints.
    *
-   * @param[in] total 前後の直線を含めた移動位置姿勢 [m, m, rad]
-   * @param[in] y_curve_end y軸方向(進行方向に垂直な方向)の移動距離 [m]。
-   * カーブの大きさを決めるもので、形状の設計パラメータとなる
-   * @param[in] x_adv x軸方向(進行方向)の前後の直線の長さ [m]。
-   * 180度ターンの場合のみで使用。
-   * @param[in] dddth_max 最大角躍度の大きさ [rad/s/s/s]
-   * @param[in] ddth_max 最大角加速度の大きさ [rad/s/s]
-   * @param[in] dth_max 最大角速度の大きさ [rad/s]
+   * @param[in] total Displacement including straights [m, m, rad].
+   * @param[in] y_curve_end Displacement along the y axis (perpendicular
+   * to travel) [m]. Determines the curve size; this is the shape design
+   * parameter.
+   * @param[in] x_adv Straight length along the x axis (travel
+   * direction) [m]. Only used for 180-degree turns.
+   * @param[in] dddth_max Maximum angular jerk magnitude [rad/s/s/s].
+   * @param[in] ddth_max Maximum angular acceleration [rad/s/s].
+   * @param[in] dth_max Maximum angular velocity [rad/s].
    */
   Shape(const Pose& total, const float y_curve_end, const float x_adv = 0,
         const float dddth_max = dddth_max_default,
@@ -76,49 +77,49 @@ struct Shape {
         dddth_max(dddth_max),
         ddth_max(ddth_max),
         dth_max(dth_max) {
-    /* 生成準備 */
-    const float Ts = 1.5e-3f;  //< シミュレーションの積分周期
-    float v = 600.0f;          //< 初期値
-    State s;                   //< シミュレーションの状態
+    /* preparation */
+    const float Ts = 1.5e-3f;  //< simulation integration period
+    float v = 600.0f;          //< initial value
+    State s;                   //< simulation state
     AccelDesigner ad;
     ad.reset(dddth_max, ddth_max, dth_max, 0, 0, total.th);
-    /* 複数回行って精度を高める */
+    /* iterate a few times for accuracy */
     for (int i = 0; i < 3; ++i) {
       s.q.x = s.q.y = 0;
-      /* シミュレーション */
+      /* simulation */
       float t = 0;
       while (t + Ts < ad.t_end()) integrate(ad, s, v, t, Ts), t += Ts;
-      integrate(ad, s, v, t, ad.t_end() - t);  //< 残りの半端分を積分
-      /* 結果を用いて更新 */
+      integrate(ad, s, v, t, ad.t_end() - t);  //< integrate the remainder
+      /* update using the result */
       v *= y_curve_end / s.q.y;
     }
     curve = s.q;
     v_ref = v;
     const float sin_th = std::sin(total.th);
     const float cos_th = std::cos(total.th);
-    /* 前後の直線の長さを決定 */
+    /* determine the straight lengths */
     if (std::abs(sin_th) < 1e-3f) {
-      /* 180度ターン */
+      /* 180-degree turn */
       straight_prev = x_adv;
       straight_post = x_adv;
       curve = total;
     } else {
-      /* 180度ターン以外 */
+      /* other turns */
       straight_prev = total.x - s.q.x - cos_th / sin_th * (total.y - s.q.y);
       straight_post = 1 / sin_th * (total.y - s.q.y);
     }
   }
   /**
-   * @brief 生成済みスラローム形状を単に代入するコンストラクタ
+   * @brief Constructor simply assigning an already generated shape.
    *
-   * @param[in] total 前後の直線を含めた移動位置姿勢 [m, m, rad]
-   * @param[in] curve 曲線部分の変位 [m, m, rad]
-   * @param[in] straight_prev 曲線前の直線の長さ [m]
-   * @param[in] straight_post 曲線後の直線の長さ [m]
-   * @param[in] v_ref 基準並進速度 [m/s]
-   * @param[in] dddth_max 最大角躍度の大きさ [rad/s/s/s]
-   * @param[in] ddth_max 最大角加速度の大きさ [rad/s/s]
-   * @param[in] dth_max 最大角速度の大きさ [rad/s]
+   * @param[in] total Displacement including straights [m, m, rad].
+   * @param[in] curve Displacement of the curved section [m, m, rad].
+   * @param[in] straight_prev Straight length before the curve [m].
+   * @param[in] straight_post Straight length after the curve [m].
+   * @param[in] v_ref Reference translation velocity [m/s].
+   * @param[in] dddth_max Maximum angular jerk magnitude [rad/s/s/s].
+   * @param[in] ddth_max Maximum angular acceleration [rad/s/s].
+   * @param[in] dth_max Maximum angular velocity [rad/s].
    */
   Shape(const Pose& total, const Pose& curve, float straight_prev,
         const float straight_post, const float v_ref, const float dddth_max,
@@ -132,14 +133,14 @@ struct Shape {
         ddth_max(ddth_max),
         dth_max(dth_max) {}
   /**
-   * @brief 軌道の積分を行う関数。ルンゲクッタ法を使用して数値積分を行う。
+   * @brief Integrate the trajectory using the Runge-Kutta method.
    *
-   * @param[in] ad 角速度分布
-   * @param[inout] s 状態変数
-   * @param[in] v 並進速度 [m/s]
-   * @param[in] t 時刻 [s]
-   * @param[in] Ts 積分時間 [s]
-   * @param[in] k_slip スリップ角定数
+   * @param[in] ad Angular velocity profile.
+   * @param[inout] s State variables.
+   * @param[in] v Translation velocity [m/s].
+   * @param[in] t Time [s].
+   * @param[in] Ts Integration period [s].
+   * @param[in] k_slip Slip angle constant.
    */
   static void integrate(const AccelDesigner& ad, State& s, const float v,
                         const float t, const float Ts, const float k_slip = 0) {
@@ -169,7 +170,7 @@ struct Shape {
     s.dddq.y = +s.ddq.x * s.dq.th + s.dq.x * s.ddq.th;
   }
   /**
-   * @brief 情報の表示
+   * @brief Print the object information.
    */
   friend std::ostream& operator<<(std::ostream& os, const Shape& obj) {
     os << "Slalom Shape" << std::endl;

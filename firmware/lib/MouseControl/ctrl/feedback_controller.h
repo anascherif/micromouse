@@ -1,83 +1,83 @@
 /**
  * @file feedback_controller.h
- * @brief フィードバック制御器クラスを保持するファイル
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Feedback controller class.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
 /**
- * @brief 制御関係の名前空間
+ * @brief Control-related namespace.
  */
 namespace ctrl {
 
 /**
- * @brief 1次フィードフォワード補償付きフィードバック制御器クラス
- * @tparam T 状態変数の型
+ * @brief Feedback controller with first-order feedforward compensation.
+ * @tparam T State variable type.
  */
 template <typename T>
 class FeedbackController {
  public:
   /**
-   * @brief フィードフォワード成分に使用する1次モデル
+   * @brief First-order model used for the feedforward component.
    *
-   * 使用しない場合は、 $ K_1 = 1,~ T_1 = 0 $ に設定すること。
-   * 伝達関数 $ y(s) = \\frac{K_1}{T_1s+1} u(s) $
+   * When unused, set $ K_1 = 1,~ T_1 = 0 $.
+   * Transfer function $ y(s) = \\frac{K_1}{T_1s+1} u(s) $
    */
   struct Model {
-    T K1; /**< @brief 1次モデルの定常ゲイン (使用しない場合は 1 とすること) */
-    T T1; /**< @brief 1次モデルの時定数 (使用しない場合は 0 とすること) */
+    T K1; /**< @brief Steady-state gain (set to 1 when unused). */
+    T T1; /**< @brief Time constant (set to 0 when unused). */
   };
   /**
-   * @brief フィードバック成分に使用するPIDゲイン
-   *        使用しない成分は、0に設定すること。
+   * @brief PID gains used for the feedback component.
+   *         Set unused components to 0.
    *
-   * 伝達関数 $ u(s) = K_p e(s) + K_i / s e(s) + K_d s e(s) $,
-   * ただし、$ e(s) := r(s) - y(s) $
+   * Transfer function $ u(s) = K_p e(s) + K_i / s e(s) + K_d s e(s) $,
+   * where $ e(s) := r(s) - y(s) $
    */
   struct Gain {
-    T Kp; /**< @brief フィードバック比例ゲイン */
-    T Ki; /**< @brief フィードバック積分ゲイン */
-    T Kd; /**< @brief フィードバック微分ゲイン */
+    T Kp; /**< @brief Proportional gain. */
+    T Ki; /**< @brief Integral gain. */
+    T Kd; /**< @brief Derivative gain. */
   };
   /**
-   * @brief 制御入力の成分内訳。
-   * @details ゲインチューニングの際に可視化するために使用する。
+   * @brief Breakdown of the control input components.
+   * @details Used for visualizing gain tuning.
    */
   struct Breakdown {
-    T ff;  /**< @brief フィードフォワード成分 */
-    T fb;  /**< @brief フィードバック成分 */
-    T fbp; /**< @brief フィードバック成分のうち比例成分 */
-    T fbi; /**< @brief フィードバック成分のうち積分成分 */
-    T fbd; /**< @brief フィードバック成分のうち微分成分 */
-    T u;   /**< @brief 成分の総和 */
+    T ff;  /**< @brief Feedforward component. */
+    T fb;  /**< @brief Feedback component. */
+    T fbp; /**< @brief Proportional feedback component. */
+    T fbi; /**< @brief Integral feedback component. */
+    T fbd; /**< @brief Derivative feedback component. */
+    T u;   /**< @brief Sum of all components. */
   };
 
  public:
   /**
-   * @brief コンストラクタ
+   * @brief Constructor.
    *
-   * @param[in] M フィードフォワードモデル
-   * @param[in] G フィードバックゲイン
+   * @param[in] M Feedforward model.
+   * @param[in] G Feedback gain.
    */
   FeedbackController(const Model& M, const Gain& G) : M(M), G(G) { reset(); }
   /**
-   * @brief 積分項をリセットする関数
+   * @brief Reset the integral term.
    */
   void reset() {
     e_int = T();
     bd = Breakdown();
   }
   /**
-   * @brief 状態を更新して、次の制御入力を得る関数
+   * @brief Update the state and compute the next control input.
    *
-   * @param[in] r 目標値
-   * @param[in] y 観測値
-   * @param[in] dr 目標値の微分
-   * @param[in] dy 観測値の微分
-   * @param[in] Ts 離散時間周期
-   * @return 次ステップでの制御入力
+   * @param[in] r  Reference value.
+   * @param[in] y  Measured value.
+   * @param[in] dr Reference derivative.
+   * @param[in] dy Measured derivative.
+   * @param[in] Ts Discrete sampling period.
+   * @return Control input for the next step.
    */
   const T& update(const T& r, const T& y, const T& dr, const T& dy,
                   const float Ts) {
@@ -96,35 +96,35 @@ class FeedbackController {
     return bd.u;
   }
   /**
-   * @brief エラー積分値を取得
+   * @brief Get the error integral.
    */
   const T& getErrorIntegral() const { return e_int; }
   /**
-   * @brief フィードフォワードモデルを取得する関数
+   * @brief Get the feedforward model.
    */
   const Model& getModel() const { return M; }
   /**
-   * @brief フィードフォワードモデルを設定する関数
+   * @brief Set the feedforward model.
    */
   void setModel(const Model& model) { M = model; }
   /**
-   * @brief フィードバックゲインを取得する関数
+   * @brief Get the feedback gain.
    */
   const Gain& getGain() const { return G; }
   /**
-   * @brief フィードバックゲインを設定する関数
+   * @brief Set the feedback gain.
    */
   void setGain(const Gain& gain) { G = gain; }
   /**
-   * @brief 制御入力の内訳を取得する関数
+   * @brief Get the control input breakdown.
    */
   const Breakdown& getBreakdown() const { return bd; }
 
  protected:
-  Model M;      /**< @brief フィードフォワードモデル */
-  Gain G;       /**< @brief フィードバックゲイン */
-  Breakdown bd; /**< @brief 制御入力の計算内訳 */
-  T e_int;      /**< @brief 追従誤差の積分値 */
+  Model M;      /**< @brief Feedforward model. */
+  Gain G;       /**< @brief Feedback gain. */
+  Breakdown bd; /**< @brief Control input breakdown. */
+  T e_int;      /**< @brief Integrated tracking error. */
 };
 
 };  // namespace ctrl

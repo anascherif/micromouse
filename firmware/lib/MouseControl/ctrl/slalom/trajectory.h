@@ -1,36 +1,38 @@
 /**
  * @file trajectory.h
- * @brief 拘束条件からスラロームを軌道生成するライブラリ
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2020-04-19
- * @copyright Copyright 2020 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Slalom trajectory generation from constraints.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  */
 #pragma once
 
 #include <ctrl/slalom/slalom.h>
 
 /**
- * @brief 制御関係の名前空間
+ * @brief Control-related namespace.
  */
 namespace ctrl {
 
 /**
- * @brief スラローム関係の名前空間
+ * @brief Slalom-related namespace.
  */
 namespace slalom {
 
 /**
- * @brief slalom::Trajectory スラローム軌道を生成するクラス
+ * @brief slalom::Trajectory slalom trajectory generator.
  *
- * スラローム形状 Shape と並進速度をもとに、各時刻における位置や速度を提供する。
+ * Provides the position and velocity at each time based on the slalom
+ * shape and the translation velocity.
  */
 class Trajectory {
  public:
   /**
-   * @brief コンストラクタ
+   * @brief Constructor.
    *
-   * @param[in] shape スラローム形状
-   * @param[in] mirror_x スラローム形状を$x$軸反転(進行方向に対して左右反転)する
+   * @param[in] shape Slalom shape.
+   * @param[in] mirror_x Mirror the shape about the x axis (left/right
+   * relative to travel direction).
    */
   Trajectory(const Shape& shape, const bool mirror_x = false) : shape(shape) {
     if (mirror_x) {
@@ -39,11 +41,11 @@ class Trajectory {
     }
   }
   /**
-   * @brief 並進速度を設定して軌道を初期化する関数
+   * @brief Set the translation velocity and initialize the trajectory.
    *
-   * @param velocity 並進速度 [m/s]
-   * @param th_start 初期姿勢 [rad] (オプション)
-   * @param t_start 初期時刻 [s] (オプション)
+   * @param velocity Translation velocity [m/s].
+   * @param th_start Initial orientation [rad] (optional).
+   * @param t_start Initial time [s] (optional).
    */
   void reset(const float velocity, const float th_start = 0,
              const float t_start = 0) {
@@ -53,38 +55,38 @@ class Trajectory {
              gain * shape.dth_max, 0, 0, shape.total.th, th_start, t_start);
   }
   /**
-   * @brief 軌道の更新
+   * @brief Update the trajectory.
    *
-   * @param[inout] state 次の時刻に更新する現在状態
-   * @param[in] t 現在時刻 [s]
-   * @param[in] Ts 積分時間 [s]
-   * @param[in] k_slip スリップ角の比例定数
+   * @param[inout] state Current state advanced to the next time.
+   * @param[in] t Current time [s].
+   * @param[in] Ts Integration period [s].
+   * @param[in] k_slip Slip angle proportional constant.
    */
   void update(State& state, const float t, const float Ts,
               const float k_slip = 0) const {
     return Shape::integrate(ad, state, velocity, t, Ts, k_slip);
   }
   /**
-   * @brief 並進速度を取得
+   * @brief Get the translation velocity.
    */
   float getVelocity() const { return velocity; }
   /**
-   * @brief ターンの合計時間を取得
+   * @brief Get the total turn time.
    */
   float getTimeCurve() const { return ad.t_end(); }
   /**
-   * @brief スラローム形状を取得
+   * @brief Get the slalom shape.
    */
   const Shape& getShape() const { return shape; }
   /**
-   * @brief 角速度設計器を取得
+   * @brief Get the angular velocity designer.
    */
   const AccelDesigner& getAccelDesigner() const { return ad; }
 
  protected:
-  Shape shape;      /**< @brief スラロームの形状 */
-  AccelDesigner ad; /**< @brief 角速度用の曲線加速生成器 */
-  float velocity;   /**< @brief 並進速度 */
+  Shape shape;      /**< @brief Slalom shape. */
+  AccelDesigner ad; /**< @brief Curved acceleration generator for angular velocity. */
+  float velocity;   /**< @brief Translation velocity. */
 };
 
 }  // namespace slalom

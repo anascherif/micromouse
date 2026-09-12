@@ -1,9 +1,10 @@
 /**
  * @file trajectory_tracker.h
- * @brief 独立2輪車の線形化フィードバック軌道追従コントローラ
- * @author Ryotaro Onuki <kerikun11+github@gmail.com>
- * @date 2019-03-31
- * @copyright Copyright 2019 Ryotaro Onuki <kerikun11+github@gmail.com>
+ * @brief Linearized feedback trajectory tracking controller for a
+ * two-wheeled differential robot.
+ *
+ * Portions derived from micromouse-mouse-control (MIT License)
+ * Copyright (c) Ryotaro Onuki <kerikun11+github@gmail.com>
  * @see
  * https://www.researchgate.net/publication/321620382_Ramsete_Articulated_and_Mobile_Robotics_for_Services_and_Technologies
  */
@@ -14,25 +15,26 @@
 #include "state.h"
 
 /**
- * @brief 制御関係の名前空間
+ * @brief Control-related namespace.
  */
 namespace ctrl {
 
 /**
- * @brief 独立2輪車の軌道追従フィードバック制御器
+ * @brief Trajectory tracking feedback controller for a two-wheeled
+ * differential robot.
  */
 class TrajectoryTracker {
  public:
   /**
-   * @brief 制御周期（積分周期）のデフォルト値 [s]
+   * @brief Default control (integration) period [s].
    */
   static constexpr const float kIntegrationPeriodDefault = 1e-3f;
   /**
-   * @brief 制御則の切り替え閾値のデフォルト値 [mm/s]
+   * @brief Default threshold for switching control laws [mm/s].
    */
   static constexpr const float kXiThresholdDefault = 150.0f;
   /**
-   * @brief フィードバックゲインを格納する構造体
+   * @brief Feedback gain structure.
    */
   struct Gain {
     float zeta = 1.0f;
@@ -41,16 +43,16 @@ class TrajectoryTracker {
     float low_b = 1e-3f;    //< b > 0
   };
   /**
-   * @brief 計算結果を格納する構造体
+   * @brief Computation result structure.
    */
   struct Result {
-    float v;   //**< @brief 並進速度 [mm/s]
-    float w;   //**< @brief 角速度 [rad/s]
-    float dv;  //**< @brief 並進加速度 [mm/s/s]
-    float dw;  //**< @brief 角加速度 [rad/s/s]
+    float v;   //**< @brief Translation velocity [mm/s].
+    float w;   //**< @brief Angular velocity [rad/s].
+    float dv;  //**< @brief Translation acceleration [mm/s/s].
+    float dw;  //**< @brief Angular acceleration [rad/s/s].
   };
   /**
-   * @brief 自作の sinc 関数 sinc(x) := sin(x) / x
+   * @brief Custom sinc function sinc(x) := sin(x) / x.
    *
    * @param[in] x
    * @return sinc(x)
@@ -63,29 +65,29 @@ class TrajectoryTracker {
 
  public:
   /**
-   * @brief コンストラクタ
+   * @brief Constructor.
    *
-   * @param[in] gain 軌道追従フィードバックゲイン
-   * @param[in] xi_threshold 制御則を切り替える閾値
+   * @param[in] gain Trajectory tracking feedback gain.
+   * @param[in] xi_threshold Threshold for switching control laws.
    */
   TrajectoryTracker(const Gain& gain,
                     const float xi_threshold = kXiThresholdDefault)
       : gain(gain), xi_threshold(xi_threshold) {}
   /**
-   * @brief 状態の初期化
+   * @brief Reset the state.
    *
-   * @param[in] vs 初期並進速度
+   * @param[in] vs Initial translation velocity.
    */
   void reset(const float vs = 0) { xi = vs; }
   /**
-   * @brief 制御入力の計算
+   * @brief Compute the control input.
    *
-   * @param[in] est_q 推定位置
-   * @param[in] est_v 推定速度
-   * @param[in] est_a 推定加速度
-   * @param[in] ref_s 目標状態
-   * @param[in] Ts 制御周期
-   * @return u 制御入力
+   * @param[in] est_q Estimated position.
+   * @param[in] est_v Estimated velocity.
+   * @param[in] est_a Estimated acceleration.
+   * @param[in] ref_s Reference state.
+   * @param[in] Ts Control period.
+   * @return u Control input.
    */
   const Result update(const Pose& est_q, const Polar& est_v, const Polar& est_a,
                       const State& ref_s,
@@ -94,17 +96,17 @@ class TrajectoryTracker {
                   Ts);
   }
   /**
-   * @brief 制御入力の計算
+   * @brief Compute the control input.
    *
-   * @param[in] est_q 推定位置
-   * @param[in] est_v 推定速度
-   * @param[in] est_a 推定加速度
-   * @param[in] ref_q 目標位置
-   * @param[in] ref_dq 目標速度
-   * @param[in] ref_ddq 目標加速度
-   * @param[in] ref_dddq 目標躍度
-   * @param[in] Ts 制御周期
-   * @return u 制御入力
+   * @param[in] est_q   Estimated position.
+   * @param[in] est_v   Estimated velocity.
+   * @param[in] est_a   Estimated acceleration.
+   * @param[in] ref_q   Reference position.
+   * @param[in] ref_dq  Reference velocity.
+   * @param[in] ref_ddq Reference acceleration.
+   * @param[in] ref_dddq Reference jerk.
+   * @param[in] Ts      Control period.
+   * @return u Control input.
    */
   const Result update(const Pose& est_q, const Polar& est_v, const Polar& est_a,
                       const Pose& ref_q, const Pose& ref_dq,
@@ -180,9 +182,9 @@ class TrajectoryTracker {
   }
 
  protected:
-  Gain gain;          /**< @brief フィードバックゲイン */
-  float xi;           /**< @brief 補助状態変数 */
-  float xi_threshold; /**< @brief 制御則を切り替える閾値 */
+  Gain gain;          /**< @brief Feedback gain. */
+  float xi;           /**< @brief Auxiliary state variable. */
+  float xi_threshold; /**< @brief Control law switch threshold. */
 };
 
 }  // namespace ctrl
